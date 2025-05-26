@@ -159,7 +159,7 @@ class Plink(object):
         """
         return 3 + self._nb_bytes * n
 
-    def _seek_and_read(self, n: int):
+    def _seek_and_read(self, n: int) -> np.ndarray:
         """Reads the genotypes of a idx"""
         with open(self.bed_filename, "rb") as bed:
             bed.read(3)
@@ -196,7 +196,7 @@ class Plink(object):
             self.bim_filename,
             sep=r"\s+",
             names=["chrom", "snp", "cm", "pos", "a1", "a2"],
-            dtype=dict(snp=str, a1=str, a2=str),
+            dtype=dict(chrom=str, snp=str, a1=str, a2=str),
         )
 
         # Saving the index as integer
@@ -304,19 +304,19 @@ class Plink(object):
         # self._bed = open(self.bed_filename, "rb")
         # self._bed.read(3)
 
-    def marker2idx(self, marker: str):
+    def marker2idx(self, marker: str) -> np.int64:
         """Returns the index of a marker"""
         if marker not in self._bim.index:
             raise ValueError(f"{marker}: marker not in BIM")
         return self._bim.loc[marker, "i"]
 
-    def idx2marker(self, idx: int):
+    def idx2marker(self, idx: int) -> str:
         """Returns the marker name from its index"""
         if idx < 0 or idx >= self.nb_markers:
             raise ValueError(f"{idx}: index out of range")
         return self._bim.index[idx]
 
-    def base(self, key, snp: np.ndarray) -> np.ndarray:
+    def base(self, key: int | str, snp: np.ndarray) -> np.ndarray:
         """Convert binary to nucleobase"""
         match key:
             case int():
