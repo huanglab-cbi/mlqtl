@@ -19,7 +19,7 @@ def calculate_fdr(group: DataFrame) -> DataFrame:
 
 
 def train_res_to_df(
-    result: List[List[MatrixFloat64 | None]],
+    train_res: List[List[MatrixFloat64 | None]],
     models: List[RegressorMixin],
     dataset: Dataset,
 ) -> DataFrame:
@@ -41,7 +41,7 @@ def train_res_to_df(
         The integrated DataFrame containing the correlation, p-value, FDR, and gene information
     """
     met_matrix, gene_idx = [], []
-    for chunk in result:
+    for chunk in train_res:
         for result in chunk:
             if result is not None:
                 gene_idx.append(True)
@@ -57,9 +57,9 @@ def train_res_to_df(
     res["gene"] = res.index.map(lambda idx: not_na_genes[idx // len(model_names)])
     res = res.astype(
         {
-            "corr": "float32",
-            "pval": "float32",
-            "gene": "string",
+            "corr": np.float64,
+            "pval": np.float64,
+            "gene": np.str_,
             "model": "category",
         }
     )
@@ -172,9 +172,10 @@ def merge_window(
 def get_region_gene(
     sliding_window_result: List[Tuple[str, MatrixFloat64, MatrixFloat64]],
     result: DataFrame,
+    threshold: np.float64,
 ) -> DataFrame:
     """
-    Get the gene in the green region
+    Get the gene in the peek window of the green region
 
     Parameters
     ----------
@@ -182,25 +183,32 @@ def get_region_gene(
         Results of the sliding window calculation
     result : DataFrame
         Integrated training results
-
+    threshold : np.float64
+        The threshold to filter the candidate genes
     Returns
     -------
     DataFrame
         Gene table of the green region in the graph
     """
     region_gene = pd.DataFrame()
-    for chr, _, window_merged in sliding_window_result:
+    for chr, window_mean, window_merged in sliding_window_result:
         if window_merged is None or window_merged.size == 0:
             continue
         tmp = result[result["chr"] == chr].reset_index(drop=True)
         for i, region in enumerate(window_merged):
             start, end = region
+            window_mean_green = window_mean[
+                (window_mean[:, 0] >= start) & (window_mean[:, 1] <= end)
+            ]
+            peek_window = window_mean_green[np.argmax(window_mean_green[:, 2])]
+            start, end = peek_window[0], peek_window[1]
             tmp_res = tmp.loc[int(start) : int(end)].copy()
             tmp_res["region"] = i + 1
             tmp_res = tmp_res.sort_values(by=["fdr_norm"], ascending=False)
             region_gene = pd.concat([region_gene, tmp_res], axis=0)
-
-    return region_gene.reset_index(drop=True)
+    region_gene = region_gene.reset_index(drop=True)
+    region_gene = region_gene[region_gene["fdr_norm"] > threshold]
+    return region_gene
 
 
 def calculate_sliding_window(
@@ -245,5 +253,5 @@ def calculate_sliding_window(
         window_merged = merge_window(window_mean, threshold)
         sliding_window_result.append((c, window_mean, window_merged))
 
-    significant_genes = get_region_gene(sliding_window_result, result)
+    significant_genes = get_region_gene(sliding_window_result, result, threshold)
     return sliding_window_result, significant_genes
