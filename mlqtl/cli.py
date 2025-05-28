@@ -58,8 +58,8 @@ def main():
     default="DecisionTreeRegressor,RandomForestRegressor,SVR",
     help="Model to use",
 )
-@click.option("-c", "--chrom", type=(str), default=None, help="Chromosome to analyze")
-@click.option("--trait", type=(str), default=None, help="Trait to analyze")
+@click.option("-c", "--chrom", type=str, default=None, help="Chromosome to analyze")
+@click.option("--trait", type=str, default=None, help="Trait to analyze")
 def run(geno, pheno, range, out, jobs, threshold, window, step, model, chrom, trait):
     """Run ML-QTL analysis"""
 
@@ -104,26 +104,27 @@ def run(geno, pheno, range, out, jobs, threshold, window, step, model, chrom, tr
 
     # check option values
     if trait:
-        input_trait = set(dataset.trait.name)
+        input_trait = set(trait.split(","))
         all_trait = set(dataset.trait.name)
-        if input_trait not in all_trait:
+        if not input_trait <= all_trait:
             click.secho(
                 f"Trait {trait} not found in dataset",
                 fg="red",
             )
             return
-        analysis_trait = trait
+        analysis_trait = trait.split(",")
 
     if chrom:
-        input_chrom = set(chrom)
+        input_chrom = set(chrom.split(","))
         all_chrom = set(dataset.gene.df["chr"].unique())
-        if input_chrom not in all_chrom:
+        if not input_chrom <= all_chrom:
             click.secho(
                 f"Chromosome {chrom} not found in dataset",
                 fg="red",
             )
             return
-        dataset.gene.filter_by_chr(list(chrom))
+        dataset.gene.filter_by_chr(chrom.split(","))
+
     # create output directory if not exists
     output_dir = os.path.join(out, "mlqtl_result")
     if not os.path.exists(output_dir):
@@ -146,7 +147,7 @@ def run(geno, pheno, range, out, jobs, threshold, window, step, model, chrom, tr
         # plot and save
         plot_path = os.path.join(trait_dir, f"{trait}_sliding_window")
         plot_graph(sliding_window_result, threshold_norm, plot_path, save=True)
-        click.echo(f"==> Graph plotted and saved to {plot_path}")
+        click.echo(f"==> Graph plotted and saved to {plot_path}.png")
         # save the sliding window result
         df_path = os.path.join(trait_dir, f"{trait}_significant_genes.tsv")
         significant_genes.to_csv(
