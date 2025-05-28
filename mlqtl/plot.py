@@ -12,9 +12,9 @@ def _plot_chr(axs, chr, window_mean, threshold):
     mask = np.array(y) > threshold
     axs.fill_between(x, y, where=mask, color="green", alpha=1)
     axs.axhline(y=threshold, color="#dc7633", linestyle="dashed")
-    axs.set_xlabel("Genes")
+    axs.set_xlabel("Window Index")
     axs.set_ylabel("-log10(P-value)")
-    axs.set_title(f"Chr {chr} (Gene number: {len(x)})")
+    axs.set_title(f"Chr {chr} (Gene number: {int(window_mean[-1][1])})")
 
     return axs
 
@@ -30,7 +30,8 @@ def plot_graph(
     Plot the sliding window result
     """
     plt.rcParams["font.size"] = font_size
-    _, axs = plt.subplots(len(sliding_window_result), figsize=(20, 40))
+    chr_num = len(sliding_window_result)
+    _, axs = plt.subplots(chr_num, figsize=(20, 40 / 12 * chr_num))
     try:
         sliding_window_result.sort(key=lambda x: int(x[0]))
     except ValueError:
