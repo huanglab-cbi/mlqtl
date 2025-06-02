@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 import re
-import tempfile
+from pandas import DataFrame
 import importlib
 import inspect
 from sklearn.base import RegressorMixin
@@ -16,7 +16,7 @@ def get_class_from_path(class_path_string: str) -> RegressorMixin:
     Parameters
     ----------
     class_path_string : str
-        A string representing the class path, e.g. "module.submodule.ClassName" or "ClassName"
+        A string representing the class path, e.g. "module.submodule.ClassName"
 
     Returns
     -------
@@ -29,7 +29,18 @@ def get_class_from_path(class_path_string: str) -> RegressorMixin:
     if "." in class_path_string:
         module_path, class_name = class_path_string.rsplit(".", 1)
     else:
-        module_path = class_name = class_path_string
+        model_name = {
+            "DecisionTreeRegressor": "sklearn.tree.DecisionTreeRegressor",
+            "RandomForestRegressor": "sklearn.ensemble.RandomForestRegressor",
+            "SVR": "sklearn.svm.SVR",
+        }
+        if class_path_string in model_name:
+            module_path, class_name = model_name[class_path_string].rsplit(".", 1)
+        else:
+            raise ValueError(
+                f"Invalid class path string '{class_path_string}'. "
+                "It should be in the format 'module.submodule.ClassName'"
+            )
 
     try:
         imported_module = importlib.import_module(module_path)
@@ -72,54 +83,43 @@ def run_plink(cmd: str) -> str:
         )
         return result.stdout
     except subprocess.CalledProcessError as e:
-        print(f"Error running plink command: {e.stderr}")
-        raise e
+        raise RuntimeError(f"{e.stderr}")
+    except Exception as e:
+        raise RuntimeError(f"An error occurred while running plink: {e}")
 
 
-def gff_to_gtf(gff_file: str, gtf_file: str):
+def gtf_to_range(gtf_file: str, region: str = "CDS") -> DataFrame:
     """
-    Convert a GFF file to GTF format using gffread.
+    Convert GTF file to plink gene range format
     """
-    if not os.path.exists(gff_file):
-        raise FileNotFoundError(f"The file {gff_file} does not exist")
-    try:
-        cmd = f"gffread {gff_file} -T -o {gtf_file}"
-        result = subprocess.run(
-            cmd,
-            shell=True,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        print(f"Error converting GFF to GTF: {e.stderr}")
-        raise e
-
-
-def gtf_to_position(gtf_file: str, region: str = "CDS", output: str = "output.tsv"):
     if not os.path.exists(gtf_file):
         raise FileNotFoundError(f"The file {gtf_file} does not exist")
-    if region != "CDS" and region != "exon":
-        raise ValueError(f"Invalid region specified: {region}. Must be 'CDS' or 'exon'")
     gtf = pd.read_csv(gtf_file, sep="\t", header=None).drop(columns=[1, 5, 6, 7])
     gtf.columns = ["chr", "region", "start", "end", "note"]
     gtf = gtf[gtf["region"] == region]
+    if gtf.empty:
+        return None
     gtf["transcript_id"] = gtf["note"].str.extract(r'transcript_id\s+"([^"]+)"')
     gtf["gene_id"] = gtf["note"].str.extract(r'gene_id\s+"([^"]+)"')
     gtf = gtf[["chr", "start", "end", "transcript_id", "gene_id"]]
-    gtf.to_csv(output, sep="\t", index=False, header=False)
+    return gtf
 
 
-def gff3_to_position(gff_file: str, region: str = "CDS", output: str = "output.tsv"):
-    try:
-        tmp_dir = tempfile.TemporaryDirectory(dir=os.getcwd())
-        gtf = os.path.join(tmp_dir.name, "temp.gtf")
-        gff_to_gtf(gff_file, gtf)
-        gtf_to_position(gtf, region, output)
-        tmp_dir.cleanup()
-        print(f"Converted {gff_file} to {os.path.abspath(output)} for region {region}")
-    except Exception as e:
-        print(f"Error converting GFF3 to position: {e}")
-        raise e
+def gff3_to_range(gff_file: str, region: str = "CDS") -> DataFrame:
+    """
+    Convert GFF3 file to plink gene range format
+    """
+    gff = pd.read_csv(gff_file, sep="\t", header=None, comment="#")
+    gff_filtered = gff[gff[2] == region].filter([0, 3, 4, 8])
+    if gff_filtered.empty:
+        return None
+    gff_filtered.columns = ["chr", "start", "end", "attributes"]
+    gff_filtered["id"] = gff_filtered["attributes"].str.extract(
+        r"[Ii][Dd]=([^;]+)", expand=False
+    )
+    gff_filtered["parent_temp"] = gff_filtered["attributes"].str.extract(
+        r"[Pp]arent=([^;]+)", expand=False
+    )
+    gff_filtered["parent"] = gff_filtered["parent_temp"].fillna(gff_filtered["id"])
+    gff_filtered = gff_filtered.filter(["chr", "start", "end", "id", "parent"])
+    return gff_filtered
