@@ -185,6 +185,7 @@ def get_region_gene(
         Integrated training results
     threshold : np.float64
         The threshold to filter the candidate genes
+
     Returns
     -------
     DataFrame
