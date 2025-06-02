@@ -94,3 +94,10 @@ class Gene:
             for i in range(0, len(self), num)
         ]
         return chunks
+
+    @property
+    def chrom(self):
+        """
+        Return the chromosome
+        """
+        return self.df["chr"].unique().astype(np.str_)
