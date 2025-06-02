@@ -53,6 +53,13 @@ class SNP(Plink):
         """
         return self._fam["iid"].to_list()
 
+    @property
+    def chrom(self):
+        """
+        Return the chromosome
+        """
+        return self._bim["chrom"].unique().astype(np.str_)
+
     def encode(
         self,
         snps: List[Tuple[int, VectorInt8]],
