@@ -90,7 +90,11 @@ def run(
 
     # define some variable
     threshold_norm = -np.log10(threshold)
-    dataset = Dataset(geno, range, pheno)
+    try:
+        dataset = Dataset(geno, range, pheno)
+    except Exception as e:
+        click.secho(f"ERROR: {e}", fg="red")
+        return
     max_workers = jobs if jobs > 0 else 1
     analysis_trait = dataset.trait.name
     model = model.split(",")
@@ -227,7 +231,11 @@ def importance(geno, pheno, range, gene, model, trait, out, onehot):
     click.echo(f"Output directory: {out}")
     click.echo("")
 
-    dataset = Dataset(geno, range, pheno)
+    try:
+        dataset = Dataset(geno, range, pheno)
+    except Exception as e:
+        click.secho(f"ERROR: {e}", fg="red")
+        return
     model = model.split(",")
     try:
         models = [get_class_from_path(m) for m in model]
