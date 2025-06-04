@@ -48,7 +48,9 @@ class Dataset:
             for chr_g in chrom_gene:
                 if chr_g not in chrom_snp:
                     err_chr.append(chr_g)
-            raise ValueError(f"Gene chromosomes {err_chr} are not in SNP chromosomes")
+            raise ValueError(
+                f"Gene chromosomes {" ".join(err_chr)} are not in SNP chromosomes"
+            )
 
     def get(self, gene: str) -> List[Tuple[int, VectorInt8]]:
         """
