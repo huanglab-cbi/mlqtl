@@ -46,9 +46,7 @@ def main():
     help="Path to output directory",
 )
 @click.option("-j", "--jobs", type=int, default=1, help="Number of processes to use")
-@click.option(
-    "--threshold", type=float, default=2.74e-05, help="Significance threshold"
-)
+@click.option("--threshold", type=float, help="Significance threshold")
 @click.option("-w", "--window", type=int, default=100, help="Sliding window size")
 @click.option("--step", type=int, default=10, help="Sliding window step size")
 @click.option(
@@ -66,8 +64,26 @@ def main():
     default=False,
     help="Use one-hot encoding for categorical features",
 )
+@click.option(
+    "--adaptive_threshold",
+    is_flag=True,
+    default=True,
+    help="Use adaptive threshold when cannot find significant genes",
+)
 def run(
-    geno, pheno, range, out, jobs, threshold, window, step, model, chrom, trait, onehot
+    geno,
+    pheno,
+    range,
+    out,
+    jobs,
+    threshold,
+    window,
+    step,
+    model,
+    chrom,
+    trait,
+    onehot,
+    adaptive_threshold,
 ):
     """Run ML-QTL analysis"""
 
@@ -79,17 +95,35 @@ def run(
     click.echo(f"Gene range file: {range}")
     click.echo(f"Output directory: {out}")
     click.echo(f"Number of processes: {jobs}")
-    click.echo(f"Significance threshold: {threshold}")
+    click.echo(f"Significance threshold: {threshold if threshold else '1/N'}")
     click.echo(f"Sliding window size: {window}")
     click.echo(f"Sliding window step size: {step}")
     click.echo(f"Model(s): {model}")
     click.echo(f"Chromosome: {chrom if chrom else 'All chromosomes'}")
     click.echo(f"Trait: {trait if trait else 'All traits'}")
     click.echo(f"One-hot encoding: {'Enabled' if onehot else 'Disabled'}")
+    click.echo(f"Adaptive threshold: {'Enabled' if adaptive_threshold else 'Disabled'}")
     click.echo("")
 
-    # define some variable
-    threshold_norm = -np.log10(threshold)
+    if threshold and threshold > 0.05:
+        click.secho(
+            "WARNING: Threshold should be less than 0.05 for genome-wide significance, current value may not be appropriate.",
+            fg="yellow",
+        )
+
+    if threshold and threshold <= 0:
+        click.secho(
+            "WARNING: Threshold should be greater than 0.",
+            fg="red",
+        )
+        return
+
+    if not threshold:
+        click.secho(
+            "Using 1/N as the significance threshold, where N is the number of genes.",
+            fg="yellow",
+        )
+
     try:
         dataset = Dataset(geno, range, pheno)
     except Exception as e:
@@ -145,23 +179,44 @@ def run(
         return
 
     # Start the analysis
+    threshold = 1 / len(dataset.gene.name) if threshold is None else threshold
     click.echo()
     click.secho("#### Starting ML-QTL Analysis ####", fg="green")
     click.echo()
+    click.echo(f"Genome-wide significance Threshold: {threshold}")
+    click.echo()
+
     for trait in analysis_trait:
         click.secho(f"Analyzing trait: {trait}", fg="green")
         click.echo(f"==> Training trait: {trait}")
         train_res = train_with_progressbar(trait, models, dataset, max_workers, onehot)
         click.echo(f"==> Training completed for trait: {trait}")
-        sliding_window_result, significant_genes = calculate_sliding_window(
-            train_res, models, dataset, window, step, threshold_norm
-        )
+        try:
+            try_threshold = threshold
+            while try_threshold > 0:
+                sliding_window_result, significant_genes = calculate_sliding_window(
+                    train_res, models, dataset, window, step, try_threshold
+                )
+                if adaptive_threshold and significant_genes.empty:
+                    try_threshold *= np.sqrt(10)
+                    continue
+                else:
+                    break
+        except Exception as e:
+            click.secho(f"ERROR: {e}", fg="red")
+            return
+
+        if adaptive_threshold and try_threshold != threshold:
+            click.secho(
+                f"==> Adaptive threshold applied. New threshold: {try_threshold}",
+                fg="yellow",
+            )
 
         trait_dir = os.path.join(out, "mlqtl_result", f"{trait}")
         os.mkdir(trait_dir) if not os.path.exists(trait_dir) else None
         # plot and save
         plot_path = os.path.join(trait_dir, f"{trait}_sliding_window")
-        plot_graph(sliding_window_result, threshold_norm, plot_path, save=True)
+        plot_graph(sliding_window_result, try_threshold, plot_path, save=True)
         click.echo(f"==> Graph plotted and saved to {plot_path}.png")
         # save the sliding window result
         df_path = os.path.join(trait_dir, f"{trait}_significant_genes.tsv")
