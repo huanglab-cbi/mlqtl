@@ -8,13 +8,13 @@ from .data import Dataset
 from .nda_typing import MatrixFloat64
 
 
-def calculate_fdr(group: DataFrame) -> DataFrame:
+def calculate_padj(group: DataFrame) -> DataFrame:
     """
-    Calculate the FDR for a given group of p-values
+    Calculate the padj for a given group of p-values
     """
     n = len(group)
     group = group.sort_values("pval", ascending=True)
-    group["fdr"] = group["pval"] * n / np.arange(1, n + 1)
+    group["padj"] = group["pval"] * n / np.arange(1, n + 1)
     return group
 
 
@@ -24,7 +24,7 @@ def train_res_to_df(
     dataset: Dataset,
 ) -> DataFrame:
     """
-    Integrate the results from different chunks and calculate FDR
+    Integrate the results from different chunks and calculate padj
 
     Parameters
     ----------
@@ -38,7 +38,7 @@ def train_res_to_df(
     Returns
     -------
     DataFrame
-        The integrated DataFrame containing the correlation, p-value, FDR, and gene information
+        The integrated DataFrame containing the correlation, p-value, padj, and gene information
     """
     met_matrix, gene_idx = [], []
     for chunk in train_res:
@@ -48,7 +48,8 @@ def train_res_to_df(
                 met_matrix.append(result)
             else:
                 gene_idx.append(False)
-
+    if met_matrix is None or len(met_matrix) == 0:
+        raise ValueError("No valid results found in the training results.")
     res = DataFrame(np.array(met_matrix).reshape(-1, 2))
     res.columns = ["corr", "pval"]
     model_names = [model.__name__ for model in models]
@@ -66,12 +67,12 @@ def train_res_to_df(
 
     res = (
         res.groupby("model", observed=False)
-        .apply(calculate_fdr, include_groups=False)
+        .apply(calculate_padj, include_groups=False)
         .reset_index(level="model")
         .dropna()
         .groupby("gene", observed=False)
         .apply(
-            lambda group: group.loc[group["fdr"].idxmin()],
+            lambda group: group.loc[group["padj"].idxmin()],
             include_groups=False,
         )
         .reset_index(level="gene")
@@ -91,7 +92,7 @@ def train_res_to_df(
             right_on="gene",
         )
         .astype({"chr": "string"})
-        .assign(fdr_norm=lambda df: -np.log10(df["fdr"]))
+        .assign(padj_norm=lambda df: -np.log10(df["padj"]))
     )
 
     return res
@@ -101,12 +102,12 @@ def sliding_window(
     met: DataFrame, chrom: str, window_size: int, step: int
 ) -> MatrixFloat64:
     """
-    Sliding window to calculate the mean of the fdr_norm values
+    Sliding window to calculate the mean of the padj_norm values
 
     Parameters
     ----------
     met : DataFrame
-        The DataFrame containing the fdr_norm values
+        The DataFrame containing the padj_norm values
     chrom : str
         The chromosome to calculate the mean
     window_size : int
@@ -117,7 +118,7 @@ def sliding_window(
     Returns
     -------
     MatrixFloat64
-        The mean of the fdr_norm values for each window and the start and end positions
+        The mean of the padj_norm values for each window and the start and end positions
     """
     met_chr = (
         met[met["chr"] == chrom]
@@ -132,7 +133,7 @@ def sliding_window(
         if window_mean and window_mean[-1][1] == end:
             break
         window_mean.append(
-            np.array([start, end, met_chr.loc[start:end, "fdr_norm"].mean()])
+            np.array([start, end, met_chr.loc[start:end, "padj_norm"].mean()])
         )
     return np.array(window_mean)
 
@@ -146,14 +147,14 @@ def merge_window(
     Parameters
     ----------
     window_mean : MatrixFloat64
-        The mean of the fdr_norm values for each window and the start and end positions
+        The mean of the padj_norm values for each window and the start and end positions
     threshold : np.float64
         The threshold to filter the mean values
 
     Returns
     -------
     MatrixFloat64
-        The merged windows with start and end positions and the mean fdr_norm value
+        The merged windows with start and end positions and the mean padj_norm value
     """
     window_loc = window_mean[window_mean[:, 2] > threshold][:, 0:2]
     if len(window_loc) == 0:
@@ -205,10 +206,11 @@ def get_region_gene(
             start, end = peek_window[0], peek_window[1]
             tmp_res = tmp.loc[int(start) : int(end)].copy()
             tmp_res["region"] = i + 1
-            tmp_res = tmp_res.sort_values(by=["fdr_norm"], ascending=False)
+            tmp_res = tmp_res.sort_values(by=["padj_norm"], ascending=False)
             region_gene = pd.concat([region_gene, tmp_res], axis=0)
     region_gene = region_gene.reset_index(drop=True)
-    region_gene = region_gene[region_gene["fdr_norm"] > threshold]
+    if not region_gene.empty:
+        region_gene = region_gene[region_gene["padj_norm"] > threshold]
     return region_gene
 
 
@@ -248,11 +250,11 @@ def calculate_sliding_window(
 
     result = train_res_to_df(train_res, models, dataset)
     chr = result["chr"].unique().to_numpy()
+    threshold_norm = -np.log10(threshold)
     sliding_window_result = []
     for c in chr:
         window_mean = sliding_window(result, c, window, step)
-        window_merged = merge_window(window_mean, threshold)
+        window_merged = merge_window(window_mean, threshold_norm)
         sliding_window_result.append((c, window_mean, window_merged))
-
-    significant_genes = get_region_gene(sliding_window_result, result, threshold)
+    significant_genes = get_region_gene(sliding_window_result, result, threshold_norm)
     return sliding_window_result, significant_genes
