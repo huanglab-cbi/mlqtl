@@ -30,6 +30,7 @@ def plot_graph(
     """
     Plot the sliding window result
     """
+    threshold_norm = -np.log10(threshold)
     plt.rcParams["font.size"] = font_size
     chr_num = len(sliding_window_result)
     _, axs = plt.subplots(chr_num, figsize=(20, 40 / 12 * chr_num))
@@ -41,7 +42,7 @@ def plot_graph(
         axs = [axs]
     for i, res in enumerate(sliding_window_result):
         chr, window_mean, _ = res
-        axs[i] = _plot_chr(axs[i], chr, window_mean, threshold)
+        axs[i] = _plot_chr(axs[i], chr, window_mean, threshold_norm)
 
     plt.tight_layout()
     plt.show()
