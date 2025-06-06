@@ -2,10 +2,11 @@ import click
 import numpy as np
 import os
 import pickle
+import pandas as pd
 
 from .data import Dataset
 from .training import train_with_progressbar, feature_importance
-from .datautils import calculate_sliding_window
+from .datautils import calculate_sliding_window, train_res_to_df
 from .plot import plot_graph, plot_feature_importance
 from .utils import get_class_from_path, run_plink, gff3_to_range, gtf_to_range
 
@@ -193,9 +194,10 @@ def run(
         click.echo(f"==> Training completed for trait: {trait}")
         try:
             try_threshold = threshold
+            train_res_processed = train_res_to_df(train_res, models, dataset)
             while try_threshold > 0:
                 sliding_window_result, significant_genes = calculate_sliding_window(
-                    train_res, models, dataset, window, step, try_threshold
+                    train_res_processed, window, step, try_threshold
                 )
                 if adaptive_threshold and significant_genes.empty:
                     try_threshold *= np.sqrt(10)
@@ -209,6 +211,12 @@ def run(
         if adaptive_threshold and try_threshold != threshold:
             click.secho(
                 f"==> Adaptive threshold applied. New threshold: {try_threshold}",
+                fg="yellow",
+            )
+
+        if significant_genes.empty:
+            click.secho(
+                f"==> No significant genes found for trait {trait} with threshold {try_threshold}",
                 fg="yellow",
             )
 
@@ -232,8 +240,80 @@ def run(
         with open(pkl_path, "wb") as f:
             pickle.dump(train_res, f)
         click.echo(f"==> Training results saved to {pkl_path}")
+        # save the training result as dataframe
+        train_res_processed.to_csv(
+            os.path.join(trait_dir, f"{trait}_train_res.tsv"),
+            sep="\t",
+            index=False,
+            header=True,
+        )
+        click.echo(f"==> Training results saved as dataframe to {trait_dir}")
         click.echo()
     click.secho("#### Analysis completed ####", fg="green")
+
+
+@main.command()
+@click.option(
+    "-f",
+    "--file",
+    type=click.Path(exists=True),
+    required=True,
+    help="Path to the training result file (dataframe)",
+)
+@click.option("-w", "--window", type=int, default=100, help="Sliding window size")
+@click.option("-s", "--step", type=int, default=10, help="Sliding window step size")
+@click.option(
+    "-t", "--threshold", type=float, required=True, help="Significance threshold"
+)
+@click.option("-o", "--out", type=click.Path(), required=True, help="Output directory")
+def rerun(file, window, step, threshold, out):
+    """Re-run sliding window analysis with new parameters"""
+
+    output_dir = os.path.join(out, "rerun_sliding_window")
+    try:
+        os.makedirs(output_dir)
+    except FileExistsError:
+        click.secho(
+            f"Output directory {output_dir} already exists. Existing files may be overwritten",
+            fg="yellow",
+        )
+    except OSError as e:
+        click.secho(
+            f"Error creating output directory {output_dir}: {e}",
+            fg="red",
+        )
+        return
+
+    df = pd.read_csv(file, sep="\t", header=0)
+    if df.empty:
+        click.secho("ERROR: The input file is empty", fg="red")
+        return
+    try:
+        sliding_window_result, significant_genes = calculate_sliding_window(
+            df, window, step, threshold
+        )
+        if significant_genes.empty:
+            click.secho(
+                f"No significant genes found with threshold {threshold}",
+                fg="red",
+            )
+            return
+
+        plot_path = os.path.join(output_dir, f"sliding_window")
+        plot_graph(sliding_window_result, threshold, plot_path, save=True)
+        click.echo(f"==> Graph plotted and saved to {plot_path}.png")
+        # save the sliding window result
+        df_path = os.path.join(output_dir, f"significant_genes.tsv")
+        significant_genes.to_csv(
+            df_path,
+            sep="\t",
+            header=True,
+            index=False,
+        )
+        click.echo(f"==> Significant genes saved to {df_path}")
+    except Exception as e:
+        click.secho(f"ERROR: {e}", fg="red")
+        return
 
 
 @main.command()
@@ -368,7 +448,7 @@ def vcf2plink(vcf, out, prefix):
         prefix = os.path.splitext(os.path.basename(vcf))[0]
     out_path = os.path.join(out, prefix)
     cmd = (
-        f"plink --vcf {vcf}  --allow-extra-chr --make-bed --double-id --out {out_path}"
+        f"plink --vcf {vcf} --snps-only --allow-extra-chr --make-bed --double-id --out {out_path}"
     )
     try:
         run_plink(cmd)
