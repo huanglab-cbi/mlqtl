@@ -215,9 +215,7 @@ def get_region_gene(
 
 
 def calculate_sliding_window(
-    train_res: List[List[MatrixFloat64 | None]],
-    models: List[RegressorMixin],
-    dataset: Dataset,
+    result: DataFrame,
     window: int,
     step: int,
     threshold: np.float64,
@@ -227,12 +225,8 @@ def calculate_sliding_window(
 
     Parameters
     ----------
-    train_res : List[List[MatrixFloat64 | None]]
-        The result from the regression models, each Matrix element is a list of (pcc, pval)
-    models : List[RegressorMixin]
-        The list of regression models
-    dataset : Dataset
-        The dataset containing the information
+    result : DataFrame
+        The integrated training results containing the correlation, p-value, and gene information
     window_size : int
         The size of the window
     step : int
@@ -248,8 +242,7 @@ def calculate_sliding_window(
         The significant genes in the green region of the graph
     """
 
-    result = train_res_to_df(train_res, models, dataset)
-    chr = result["chr"].unique().to_numpy()
+    chr = result["chr"].unique()
     threshold_norm = -np.log10(threshold)
     sliding_window_result = []
     for c in chr:
