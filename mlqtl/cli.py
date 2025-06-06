@@ -310,7 +310,7 @@ def rerun(file, window, step, threshold, out):
             header=True,
             index=False,
         )
-        click.echo(f"==> Significant genes saved to {df_path}")
+        click.echo(f"==> Significant genes saved to {df_path}.tsv")
     except Exception as e:
         click.secho(f"ERROR: {e}", fg="red")
         return
