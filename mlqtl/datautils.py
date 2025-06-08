@@ -8,7 +8,7 @@ from .data import Dataset
 from .nda_typing import MatrixFloat64
 
 
-def calculate_padj(group: DataFrame) -> DataFrame:
+def cal_padj(group: DataFrame) -> DataFrame:
     """
     Calculate the padj for a given group of p-values
     """
@@ -18,7 +18,7 @@ def calculate_padj(group: DataFrame) -> DataFrame:
     return group
 
 
-def train_res_to_df(
+def proc_train_res(
     train_res: List[List[MatrixFloat64 | None]],
     models: List[RegressorMixin],
     dataset: Dataset,
@@ -67,7 +67,7 @@ def train_res_to_df(
 
     res = (
         res.groupby("model", observed=False)
-        .apply(calculate_padj, include_groups=False)
+        .apply(cal_padj, include_groups=False)
         .reset_index(level="model")
         .dropna()
         .groupby("gene", observed=False)
@@ -98,7 +98,7 @@ def train_res_to_df(
     return res
 
 
-def sliding_window(
+def cal_sliding_window(
     met: DataFrame, chrom: str, window_size: int, step: int
 ) -> MatrixFloat64:
     """
@@ -170,7 +170,7 @@ def merge_window(
     return np.array(loc_merged)
 
 
-def get_region_gene(
+def significance(
     sliding_window_result: List[Tuple[str, MatrixFloat64, MatrixFloat64]],
     result: DataFrame,
     threshold: np.float64,
@@ -214,7 +214,7 @@ def get_region_gene(
     return region_gene
 
 
-def calculate_sliding_window(
+def sliding_window(
     result: DataFrame,
     window: int,
     step: int,
@@ -244,10 +244,10 @@ def calculate_sliding_window(
 
     chr = result["chr"].unique()
     threshold_norm = -np.log10(threshold)
-    sliding_window_result = []
+    sw_res = []
     for c in chr:
-        window_mean = sliding_window(result, c, window, step)
+        window_mean = cal_sliding_window(result, c, window, step)
         window_merged = merge_window(window_mean, threshold_norm)
-        sliding_window_result.append((c, window_mean, window_merged))
-    significant_genes = get_region_gene(sliding_window_result, result, threshold_norm)
-    return sliding_window_result, significant_genes
+        sw_res.append((c, window_mean, window_merged))
+    sig_genes = significance(sw_res, result, threshold_norm)
+    return sw_res, sig_genes
