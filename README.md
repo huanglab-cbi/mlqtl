@@ -51,7 +51,7 @@ pip install numpy==2.2.6 mlqtl
     git clone https://github.com/huanglab-cbi/mlqtl.git
 
     # Download from our website
-    wget https://cbi.njau.edu.cn/mlqtl-doc/download/mlqtl-{version}.tar.gz
+    wget https://cbi.njau.edu.cn/mlqtl-doc/download/source_code.tar.gz
     ```
 
 2. Navigate to source directory
