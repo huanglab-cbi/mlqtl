@@ -30,13 +30,19 @@ Install from PyPI:
 pip install mlqtl
 ```
 
-### 2. Install via uv
+Note: Starting with version 2.3.0, NumPy no longer provides binary packages for Linux systems with Glibc versions below 2.28, [link](https://numpy.org/devdocs/release/2.3.0-notes.html). Therefore, if you are using an older Linux system, you need to install an earlier version of NumPy or ensure GCC >= 9.3 is available
+
+If you encounter installation issues, you can try the following approaches:
 
 ```bash
-uv add mlqtl
+# Force installation using NumPy's binary wheel package
+pip install mlqtl --only-binary=numpy
+
+# Alternatively, install a specific version of NumPy
+pip install numpy==2.2.6 mlqtl
 ```
 
-### 3. Install from source
+### 2. Install from source
 
 1. Download source code
  
@@ -56,32 +62,20 @@ uv add mlqtl
 3. Install dependencies
 
     ```bash
-    #For pip users:
     pip install -r requirements.txt
-
-    #For uv users:
-    uv sync
     ```
 
 4. Build package
 
     ```bash
-    # For pip users:
     pip install build
     python -m build
-
-    # For uv users:
-    uv build
     ```
 
 5. Install package
 
     ```bash
-    # For pip users:
     pip install dist/mlqtl-{version}-py3-none-any.whl
-
-    # For uv users:
-    uv add dist/mlqtl-{version}-py3-none-any.whl
     ```
 
 ## 4. Usage
