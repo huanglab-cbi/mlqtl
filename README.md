@@ -3,7 +3,7 @@ ML-QTL
 
 ## 1. Overview  
 
-`ML-QTL` is a Python package that leverages machine learning to predict phenotype-associated genes. It evaluates the significance of associations between single nucleotide polymorphisms (SNPs) and phenotypes by assessing the predictive performance of regression models. The tool provides native support for `plink` binary files, enabling efficient processing of large-scale genomic datasets.
+`ML-QTL` is a machine learning–based Python tool for QTL mapping. It assesses SNP–trait associations using regression model performance and identifies candidate QTL regions through a sliding window approach. The tool enables efficient gene discovery and supports molecular breeding in crops.
 
 ## 2. Features  
 
