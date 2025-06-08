@@ -5,8 +5,8 @@ import pickle
 import pandas as pd
 
 from .data import Dataset
-from .training import train_with_progressbar, feature_importance
-from .datautils import calculate_sliding_window, train_res_to_df
+from .train import train_with_progressbar, feature_importance
+from .datautils import sliding_window, proc_train_res
 from .plot import plot_graph, plot_feature_importance
 from .utils import get_class_from_path, run_plink, gff3_to_range, gtf_to_range
 
@@ -194,12 +194,12 @@ def run(
         click.echo(f"==> Training completed for trait: {trait}")
         try:
             try_threshold = threshold
-            train_res_processed = train_res_to_df(train_res, models, dataset)
+            train_res_processed = proc_train_res(train_res, models, dataset)
             while try_threshold > 0:
-                sliding_window_result, significant_genes = calculate_sliding_window(
+                sw_res, sig_genes = sliding_window(
                     train_res_processed, window, step, try_threshold
                 )
-                if adaptive_threshold and significant_genes.empty:
+                if adaptive_threshold and sig_genes.empty:
                     try_threshold *= np.sqrt(10)
                     continue
                 else:
@@ -214,7 +214,7 @@ def run(
                 fg="yellow",
             )
 
-        if significant_genes.empty:
+        if sig_genes.empty:
             click.secho(
                 f"==> No significant genes found for trait {trait} with threshold {try_threshold}",
                 fg="yellow",
@@ -224,11 +224,11 @@ def run(
         os.mkdir(trait_dir) if not os.path.exists(trait_dir) else None
         # plot and save
         plot_path = os.path.join(trait_dir, f"{trait}_sliding_window")
-        plot_graph(sliding_window_result, try_threshold, plot_path, save=True)
+        plot_graph(sw_res, try_threshold, plot_path, save=True)
         click.echo(f"==> Graph plotted and saved to {plot_path}.png")
         # save the sliding window result
         df_path = os.path.join(trait_dir, f"{trait}_significant_genes.tsv")
-        significant_genes.to_csv(
+        sig_genes.to_csv(
             df_path,
             sep="\t",
             header=True,
@@ -289,10 +289,8 @@ def rerun(file, window, step, threshold, out):
         click.secho("ERROR: The input file is empty", fg="red")
         return
     try:
-        sliding_window_result, significant_genes = calculate_sliding_window(
-            df, window, step, threshold
-        )
-        if significant_genes.empty:
+        sw_res, sig_genes = sliding_window(df, window, step, threshold)
+        if sig_genes.empty:
             click.secho(
                 f"No significant genes found with threshold {threshold}",
                 fg="red",
@@ -300,11 +298,11 @@ def rerun(file, window, step, threshold, out):
             return
 
         plot_path = os.path.join(output_dir, f"sliding_window")
-        plot_graph(sliding_window_result, threshold, plot_path, save=True)
+        plot_graph(sw_res, threshold, plot_path, save=True)
         click.echo(f"==> Graph plotted and saved to {plot_path}.png")
         # save the sliding window result
         df_path = os.path.join(output_dir, f"significant_genes.tsv")
-        significant_genes.to_csv(
+        sig_genes.to_csv(
             df_path,
             sep="\t",
             header=True,
@@ -447,9 +445,7 @@ def vcf2plink(vcf, out, prefix):
     if not prefix:
         prefix = os.path.splitext(os.path.basename(vcf))[0]
     out_path = os.path.join(out, prefix)
-    cmd = (
-        f"plink --vcf {vcf} --snps-only --allow-extra-chr --make-bed --double-id --out {out_path}"
-    )
+    cmd = f"plink --vcf {vcf} --snps-only --allow-extra-chr --make-bed --double-id --out {out_path}"
     try:
         run_plink(cmd)
         click.secho(
