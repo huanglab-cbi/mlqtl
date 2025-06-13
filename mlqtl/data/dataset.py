@@ -49,7 +49,7 @@ class Dataset:
                 if chr_g not in chrom_snp:
                     err_chr.append(chr_g)
             raise ValueError(
-                f"Gene chromosomes {" ".join(err_chr)} are not in SNP chromosomes"
+                f"The chromosomes in gene range file: \n{" ".join(err_chr)} \nare not in the SNP file, Please check the chromosome names in both files to ensure they match (or at least that all chromosomes in the gene range file are present in the SNP file)"
             )
 
     def get(self, gene: str) -> List[Tuple[int, VectorInt8]]:
