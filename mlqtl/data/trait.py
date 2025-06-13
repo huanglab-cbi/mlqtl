@@ -24,7 +24,7 @@ class Trait:
                 )
             if not header[0] == "sample":
                 raise ValueError("The first column of the traits file must be 'sample'")
-        self.df: DataFrame = pd.read_csv(traits_file, sep="\t", header=0)
+        self.df: DataFrame = pd.read_csv(traits_file, sep=r"\s+", header=0)
         self.df = self.df.astype(
             {
                 "sample": str,

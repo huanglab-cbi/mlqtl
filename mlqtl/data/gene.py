@@ -16,7 +16,7 @@ class Gene:
     def __init__(self, file: str):
         if not os.path.exists(file):
             raise FileNotFoundError(f"The file {file} does not exist.")
-        self.df: DataFrame = pd.read_csv(file, sep="\t", header=None)
+        self.df: DataFrame = pd.read_csv(file, sep=r"\s+", header=None)
         self.df.columns = ["chr", "start", "end", "transcript", "gene"]
         self.name: VectorStr = self.df["gene"].unique().astype(np.str_)
         self.df = self.df.astype(

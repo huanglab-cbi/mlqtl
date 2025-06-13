@@ -94,7 +94,7 @@ def gtf_to_range(gtf_file: str, region: str = "CDS") -> DataFrame:
     """
     if not os.path.exists(gtf_file):
         raise FileNotFoundError(f"The file {gtf_file} does not exist")
-    gtf = pd.read_csv(gtf_file, sep="\t", header=None).drop(columns=[1, 5, 6, 7])
+    gtf = pd.read_csv(gtf_file, sep=r"\s+", header=None).drop(columns=[1, 5, 6, 7])
     gtf.columns = ["chr", "region", "start", "end", "note"]
     gtf = gtf[gtf["region"] == region]
     if gtf.empty:
@@ -109,7 +109,7 @@ def gff3_to_range(gff_file: str, region: str = "CDS") -> DataFrame:
     """
     Convert GFF3 file to plink gene range format
     """
-    gff = pd.read_csv(gff_file, sep="\t", header=None, comment="#")
+    gff = pd.read_csv(gff_file, sep=r"\s+", header=None, comment="#")
     gff_filtered = gff[gff[2] == region].filter([0, 3, 4, 8])
     if gff_filtered.empty:
         return None
