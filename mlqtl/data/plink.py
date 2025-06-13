@@ -199,6 +199,11 @@ class Plink(object):
             dtype=dict(chrom=str, snp=str, a1=str, a2=str),
         )
 
+        # replace the empty markers with "chrom-pos"
+        bim["snp"] = bim["snp"].replace(".", np.nan).infer_objects(copy=False)
+        bim["snp"] = bim["snp"].fillna(bim["chrom"] + "-" + bim["pos"].astype(str))
+        bim["snp"] = bim["snp"].astype(str)
+
         # Saving the index as integer
         bim["i"] = bim.index
 
