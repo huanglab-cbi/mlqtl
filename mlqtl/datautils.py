@@ -18,10 +18,19 @@ def cal_padj(group: DataFrame) -> DataFrame:
     return group
 
 
+def skip_padj(group: DataFrame) -> DataFrame:
+    """
+    Skip the padj calculation for a given group of p-values
+    """
+    group["padj"] = group["pval"]
+    return group
+
+
 def proc_train_res(
     train_res: List[List[MatrixFloat64 | None]],
     models: List[RegressorMixin],
     dataset: Dataset,
+    padj: bool = False,
 ) -> DataFrame:
     """
     Integrate the results from different chunks and calculate padj
@@ -65,9 +74,14 @@ def proc_train_res(
         }
     )
 
+    if padj:
+        padj_func = cal_padj
+    else:
+        padj_func = skip_padj
+
     res = (
         res.groupby("model", observed=False)
-        .apply(cal_padj, include_groups=False)
+        .apply(padj_func, include_groups=False)
         .reset_index(level="model")
         .dropna()
         .groupby("gene", observed=False)

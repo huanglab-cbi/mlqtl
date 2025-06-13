@@ -71,6 +71,12 @@ def main():
     default=True,
     help="Use adaptive threshold when cannot find significant genes",
 )
+@click.option(
+    "--padj",
+    is_flag=True,
+    default=False,
+    help="Use adjusted p-value for significance threshold",
+)
 def run(
     geno,
     pheno,
@@ -85,6 +91,7 @@ def run(
     trait,
     onehot,
     adaptive_threshold,
+    padj,
 ):
     """Run ML-QTL analysis"""
 
@@ -104,6 +111,7 @@ def run(
     click.echo(f"Trait: {trait if trait else 'All traits'}")
     click.echo(f"One-hot encoding: {'Enabled' if onehot else 'Disabled'}")
     click.echo(f"Adaptive threshold: {'Enabled' if adaptive_threshold else 'Disabled'}")
+    click.echo(f"Use adjusted p-value: {'Enabled' if padj else 'Disabled'}")
     click.echo("")
 
     if threshold and threshold > 0.05:
@@ -194,7 +202,7 @@ def run(
         click.echo(f"==> Training completed for trait: {trait}")
         try:
             try_threshold = threshold
-            train_res_processed = proc_train_res(train_res, models, dataset)
+            train_res_processed = proc_train_res(train_res, models, dataset, padj)
             while try_threshold > 0:
                 sw_res, sig_genes = sliding_window(
                     train_res_processed, window, step, try_threshold
@@ -284,7 +292,7 @@ def rerun(file, window, step, threshold, out):
         )
         return
 
-    df = pd.read_csv(file, sep="\t", header=0)
+    df = pd.read_csv(file, sep=r"\s+", header=0)
     if df.empty:
         click.secho("ERROR: The input file is empty", fg="red")
         return
@@ -423,38 +431,6 @@ def importance(geno, pheno, range, gene, model, trait, out, onehot):
     plot_path = os.path.join(gene_dir, f"{gene}_{trait}")
     plot_feature_importance(feature_importance_df, 10, True, plot_path)
     click.echo(f"==> Feature importance plot saved to {gene_dir}")
-
-
-@main.command()
-@click.option(
-    "-f", "--vcf", type=click.Path(exists=True), required=True, help="Path to VCF file"
-)
-@click.option("-o", "--out", type=click.Path(), required=True, help="Output directory")
-@click.option("-p", "--prefix", type=str, help="Prefix for output files")
-def vcf2plink(vcf, out, prefix):
-    """Convert VCF file to plink binary format"""
-
-    try:
-        os.makedirs(out)
-    except FileExistsError:
-        click.secho(
-            f"Output directory {out} already exists. Existing files may be overwritten",
-            fg="yellow",
-        )
-
-    if not prefix:
-        prefix = os.path.splitext(os.path.basename(vcf))[0]
-    out_path = os.path.join(out, prefix)
-    cmd = f"plink --vcf {vcf} --snps-only --allow-extra-chr --make-bed --double-id --out {out_path}"
-    try:
-        run_plink(cmd)
-        click.secho(
-            f"VCF file converted to plink binary format:",
-            fg="green",
-        )
-        click.echo(f"{out_path}.bed \n{out_path}.bim \n{out_path}.fam")
-    except Exception as e:
-        click.secho(f"Error converting VCF file: {e}", fg="red")
 
 
 @main.command()
