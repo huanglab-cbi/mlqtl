@@ -103,14 +103,6 @@ class SNP(Plink):
     def convert_onehot(X: MatrixInt8) -> TensorFloat64:
         result: TensorFloat64 = np.zeros((X.shape[0], X.shape[1], 4), dtype=float)
         # A G C T
-        # rows_A, cols_A = np.where(X == 1)
-        # rows_G, cols_G = np.where(X == 2)
-        # rows_C, cols_C = np.where(X == 3)
-        # rows_T, cols_T = np.where(X == 4)
-        # result[rows_A, cols_A, 0] = 1
-        # result[rows_G, cols_G, 1] = 1
-        # result[rows_C, cols_C, 2] = 1
-        # result[rows_T, cols_T, 3] = 1
         for i in range(0, 4):
             rows, cols = np.where(X == i + 1)
             result[rows, cols, i] = 1

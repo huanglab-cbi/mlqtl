@@ -46,16 +46,33 @@ def main():
     required=True,
     help="Path to output directory",
 )
-@click.option("-j", "--jobs", type=int, default=1, help="Number of processes to use")
+@click.option(
+    "-j",
+    "--jobs",
+    type=int,
+    default=1,
+    help="Number of processes to use",
+    show_default=True,
+)
 @click.option("--threshold", type=float, help="Significance threshold")
-@click.option("-w", "--window", type=int, default=100, help="Sliding window size")
-@click.option("--step", type=int, default=10, help="Sliding window step size")
+@click.option(
+    "-w",
+    "--window",
+    type=int,
+    default=100,
+    help="Sliding window size",
+    show_default=True,
+)
+@click.option(
+    "--step", type=int, default=10, help="Sliding window step size", show_default=True
+)
 @click.option(
     "-m",
     "--model",
     type=str,
     default="DecisionTreeRegressor,RandomForestRegressor,SVR",
     help="Model to use",
+    show_default=True,
 )
 @click.option("-c", "--chrom", type=str, default=None, help="Chromosome to analyze")
 @click.option("--trait", type=str, default=None, help="Trait to analyze")
@@ -96,23 +113,36 @@ def run(
     """Run ML-QTL analysis"""
 
     # echo the parameters
-    click.echo("")
-    click.secho("#### ML-QTL Analysis Parameters ####", fg="green")
-    click.echo(f"Genotype file: {geno}")
-    click.echo(f"Phenotype file: {pheno}")
-    click.echo(f"Gene range file: {range}")
-    click.echo(f"Output directory: {out}")
-    click.echo(f"Number of processes: {jobs}")
-    click.echo(f"Significance threshold: {threshold if threshold else '1/N'}")
-    click.echo(f"Sliding window size: {window}")
-    click.echo(f"Sliding window step size: {step}")
-    click.echo(f"Model(s): {model}")
-    click.echo(f"Chromosome: {chrom if chrom else 'All chromosomes'}")
-    click.echo(f"Trait: {trait if trait else 'All traits'}")
-    click.echo(f"One-hot encoding: {'Enabled' if onehot else 'Disabled'}")
-    click.echo(f"Adaptive threshold: {'Enabled' if adaptive_threshold else 'Disabled'}")
-    click.echo(f"Use adjusted p-value: {'Enabled' if padj else 'Disabled'}")
-    click.echo("")
+    click.echo("\n" + "=" * 40)
+    click.secho("     ML-QTL Analysis Parameters     ", fg="green", bold=True)
+    click.echo("=" * 40)
+    click.secho(f"{'Genotype file:':<25} {geno}", fg="cyan")
+    click.secho(f"{'Phenotype file:':<25} {pheno}", fg="cyan")
+    click.secho(f"{'Gene range file:':<25} {range}", fg="cyan")
+    click.secho(f"{'Output directory:':<25} {out}", fg="cyan")
+    click.secho(f"{'Number of processes:':<25} {jobs}", fg="cyan")
+    click.secho(
+        f"{'Significance threshold:':<25} {threshold if threshold else '1/N'}",
+        fg="cyan",
+    )
+    click.secho(f"{'Sliding window size:':<25} {window}", fg="cyan")
+    click.secho(f"{'Sliding window step size:':<25} {step}", fg="cyan")
+    click.secho(f"{'Model(s):':<25} {model}", fg="cyan")
+    click.secho(
+        f"{'Chromosome:':<25} {chrom if chrom else 'all chromosomes'}", fg="cyan"
+    )
+    click.secho(f"{'Trait:':<25} {trait if trait else 'all traits'}", fg="cyan")
+    click.secho(
+        f"{'One-hot encoding:':<25} {'enabled' if onehot else 'disabled'}", fg="cyan"
+    )
+    click.secho(
+        f"{'Adaptive threshold:':<25} {'enabled' if adaptive_threshold else 'disabled'}",
+        fg="cyan",
+    )
+    click.secho(
+        f"{'Use adjusted p-value:':<25} {'enabled' if padj else 'disabled'}", fg="cyan"
+    )
+    click.echo("=" * 40 + "\n")
 
     if threshold and threshold > 0.05:
         click.secho(
@@ -189,17 +219,13 @@ def run(
 
     # Start the analysis
     threshold = 1 / len(dataset.gene.name) if threshold is None else threshold
-    click.echo()
-    click.secho("#### Starting ML-QTL Analysis ####", fg="green")
-    click.echo()
-    click.echo(f"Genome-wide significance Threshold: {threshold}")
-    click.echo()
-
+    click.echo("==> Starting Analysis ...")
+    click.echo(f"==> Genome-wide significance Threshold: {threshold}")
     for trait in analysis_trait:
-        click.secho(f"Analyzing trait: {trait}", fg="green")
-        click.echo(f"==> Training trait: {trait}")
+        click.echo(f"==> Analyzing Trait: {trait}")
+        click.echo(f"==> Training Model ...")
         train_res = train_with_progressbar(trait, models, dataset, max_workers, onehot)
-        click.echo(f"==> Training completed for trait: {trait}")
+        click.echo(f"==> Processing Training Result ...")
         try:
             try_threshold = threshold
             train_res_processed = proc_train_res(train_res, models, dataset, padj)
@@ -218,46 +244,47 @@ def run(
 
         if adaptive_threshold and try_threshold != threshold:
             click.secho(
-                f"==> Adaptive threshold applied. New threshold: {try_threshold}",
+                f"==> Adaptive threshold applied. The new threshold for this trait is: {try_threshold}",
                 fg="yellow",
             )
 
         if sig_genes.empty:
             click.secho(
-                f"==> No significant genes found for trait {trait} with threshold {try_threshold}",
+                f"==> No significant genes found for this trait with threshold {try_threshold}",
                 fg="yellow",
             )
 
         trait_dir = os.path.join(out, f"{trait}")
         os.mkdir(trait_dir) if not os.path.exists(trait_dir) else None
         # plot and save
-        plot_path = os.path.join(trait_dir, f"{trait}_sliding_window")
+        plot_path = os.path.join(trait_dir, f"sliding_window")
         plot_graph(sw_res, try_threshold, plot_path, save=True)
-        click.echo(f"==> Graph plotted and saved to {plot_path}.png")
+        click.echo(f"==> Result Graph [{plot_path}.png]")
         # save the sliding window result
-        df_path = os.path.join(trait_dir, f"{trait}_significant_genes.tsv")
+        df_path = os.path.join(trait_dir, f"significant_genes.tsv")
         sig_genes.to_csv(
             df_path,
             sep="\t",
             header=True,
             index=False,
         )
-        click.echo(f"==> Significant genes saved to {df_path}")
+        click.echo(f"==> Significant Genes Table [{df_path}]")
         # save the original training result
-        pkl_path = os.path.join(trait_dir, f"{trait}_train_res.pkl")
+        pkl_path = os.path.join(trait_dir, f"train_res.pkl")
         with open(pkl_path, "wb") as f:
             pickle.dump(train_res, f)
-        click.echo(f"==> Training results saved to {pkl_path}")
+        click.echo(f"==> Training Result Pkl [{pkl_path}]")
         # save the training result as dataframe
         train_res_processed.to_csv(
-            os.path.join(trait_dir, f"{trait}_train_res.tsv"),
+            os.path.join(trait_dir, f"train_res.tsv"),
             sep="\t",
             index=False,
             header=True,
         )
-        click.echo(f"==> Training results saved as dataframe to {trait_dir}")
-        click.echo()
-    click.secho("#### Analysis completed ####", fg="green")
+        click.echo(
+            f"==> Training Result Table [{os.path.join(trait_dir, f"train_res.tsv")}]"
+        )
+    click.secho(f"Analysis completed", fg="green")
 
 
 @main.command()
@@ -268,8 +295,22 @@ def run(
     required=True,
     help="Path to the training result file (dataframe)",
 )
-@click.option("-w", "--window", type=int, default=100, help="Sliding window size")
-@click.option("-s", "--step", type=int, default=10, help="Sliding window step size")
+@click.option(
+    "-w",
+    "--window",
+    type=int,
+    default=100,
+    help="Sliding window size",
+    show_default=True,
+)
+@click.option(
+    "-s",
+    "--step",
+    type=int,
+    default=10,
+    help="Sliding window step size",
+    show_default=True,
+)
 @click.option(
     "-t", "--threshold", type=float, required=True, help="Significance threshold"
 )
@@ -297,6 +338,16 @@ def rerun(file, window, step, threshold, out):
         click.secho("ERROR: The input file is empty", fg="red")
         return
     try:
+        df = df.astype(
+            {
+                "gene": str,
+                "model": "category",
+                "corr": np.float64,
+                "padj": np.float64,
+                "chr": str,
+                "padj_norm": np.float64,
+            }
+        )
         sw_res, sig_genes = sliding_window(df, window, step, threshold)
         if sig_genes.empty:
             click.secho(
@@ -352,6 +403,7 @@ def rerun(file, window, step, threshold, out):
     type=str,
     default="DecisionTreeRegressor,RandomForestRegressor,SVR",
     help="Model to use",
+    show_default=True,
 )
 @click.option("--trait", type=str, required=True, help="Trait name ( only one trait )")
 @click.option(
@@ -362,18 +414,6 @@ def rerun(file, window, step, threshold, out):
 )
 def importance(geno, pheno, range, gene, model, trait, out, onehot):
     """Calculate feature importance and plot bar chart"""
-    # echo the parameters
-    click.echo("")
-    click.secho("#### Feature Importance Parameters ####", fg="green")
-    click.echo(f"Genotype file: {geno}")
-    click.echo(f"Phenotype file: {pheno}")
-    click.echo(f"Gene range file: {range}")
-    click.echo(f"Gene name: {gene}")
-    click.echo(f"Model(s): {model}")
-    click.echo(f"Trait: {trait}")
-    click.echo(f"One-hot encoding: {'Enabled' if onehot else 'Disabled'}")
-    click.echo(f"Output directory: {out}")
-    click.echo("")
 
     try:
         dataset = Dataset(geno, range, pheno)
