@@ -30,7 +30,7 @@ Install from PyPI:
 pip install mlqtl
 ```
 
-Note: Starting with version 2.3.0, NumPy no longer provides binary packages for Linux systems with Glibc versions below 2.28, [link](https://numpy.org/devdocs/release/2.3.0-notes.html). Therefore, if you are using an older Linux system, you need to install an earlier version of NumPy or ensure GCC >= 9.3 is available
+Note: Starting with version 2.3.0, NumPy no longer provides binary packages for Linux systems with glibc version below 2.28, [link](https://numpy.org/devdocs/release/2.3.0-notes.html). Therefore, if you are using an older Linux system, you need to install an earlier version of NumPy
 
 If you encounter installation issues, you can try the following approaches:
 
@@ -97,7 +97,38 @@ gtf2range   Convert GTF file to plink gene range format
 importance  Calculate feature importance and plot bar chart
 rerun       Re-run sliding window analysis with new parameters
 run         Run ML-QTL analysis
-vcf2plink   Convert VCF file to plink binary format
 ```
 
 For detailed usage instructions, please refer to the [documentation](https://cbi.njau.edu.cn/mlqtl-doc/en/index.html)
+
+## 5 Example  
+
+### 1. download sample data
+
+Visit the [download page](https://cbi.njau.edu.cn/mlqtl-doc/download/) to get `imputed_base_filtered_v0.7.vcf.gz`, `gene_location_range.txt`, and `grain_length.txt`.
+
+Alternatively, use the following commands to download them:
+```bash
+wget https://cbi.njau.edu.cn/mlqtl-doc/download/imputed_base_filtered_v0.7.vcf.gz
+
+wget https://cbi.njau.edu.cn/mlqtl-doc/download/gene_location_range.txt
+
+wget https://cbi.njau.edu.cn/mlqtl-doc/download/grain_length.txt
+```
+`gene_location_range.txt` is generated based on the GFF file of the reference genome. For details, please refer to the [documentation](https://cbi.njau.edu.cn/mlqtl-doc/en/index.html)
+
+### 2. data preprocessing
+
+```bash
+vcf=imputed_base_filtered_v0.7.vcf.gz
+
+plink --vcf ${vcf} --snps-only --allow-extra-chr --make-bed --double-id --vcf-half-call m --extract range gene_location_range.txt --out imputed
+```
+
+### 3. run mlqlt command line
+
+```bash
+mlqtl run -g imputed -p grain_length.txt -r gene_location_range.txt -j 64 --padj --threshold 2.74e-5 -o result
+
+mlqtl importance -g imputed -p grain_length.txt -r gene_location_range.txt --trait grain_length --gene Os03g0407400 -m DecisionTreeRegressor -o result
+```

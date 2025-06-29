@@ -68,7 +68,7 @@ def main():
 @click.option(
     "--adaptive_threshold",
     is_flag=True,
-    default=True,
+    default=False,
     help="Use adaptive threshold when cannot find significant genes",
 )
 @click.option(
@@ -172,7 +172,7 @@ def run(
         dataset.gene.filter_by_chr(chrom.split(","))
 
     # create output directory if not exists
-    output_dir = os.path.join(out, "mlqtl_result")
+    output_dir = os.path.join(out)
     try:
         os.makedirs(output_dir)
     except FileExistsError:
@@ -228,7 +228,7 @@ def run(
                 fg="yellow",
             )
 
-        trait_dir = os.path.join(out, "mlqtl_result", f"{trait}")
+        trait_dir = os.path.join(out, f"{trait}")
         os.mkdir(trait_dir) if not os.path.exists(trait_dir) else None
         # plot and save
         plot_path = os.path.join(trait_dir, f"{trait}_sliding_window")
@@ -277,7 +277,7 @@ def run(
 def rerun(file, window, step, threshold, out):
     """Re-run sliding window analysis with new parameters"""
 
-    output_dir = os.path.join(out, "rerun_sliding_window")
+    output_dir = os.path.join(out)
     try:
         os.makedirs(output_dir)
     except FileExistsError:
@@ -324,18 +324,21 @@ def rerun(file, window, step, threshold, out):
 
 @main.command()
 @click.option(
+    "-g",
     "--geno",
     type=str,
     required=True,
     help="Path to genotype file (plink binary format)",
 )
 @click.option(
+    "-p",
     "--pheno",
     type=click.Path(exists=True),
     required=True,
     help="Path to phenotype file",
 )
 @click.option(
+    "-r",
     "--range",
     type=click.Path(exists=True),
     required=True,
@@ -385,7 +388,7 @@ def importance(geno, pheno, range, gene, model, trait, out, onehot):
         return
 
     # create output directory if not exists
-    output_dir = os.path.join(out, "feature_importance")
+    output_dir = os.path.join(out)
     try:
         os.makedirs(output_dir)
     except FileExistsError:
