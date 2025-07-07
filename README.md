@@ -1,5 +1,7 @@
 # 🧬 ML-QTL: Machine Learning for Quantitative Trait Loci Mapping
 
+[![PyPI version](https://badge.fury.io/py/mlqtl.svg?icon=si%3Apython)](https://badge.fury.io/py/mlqtl)
+
 `ML-QTL` is a machine learning–based Python tool for QTL mapping. It assesses SNP–trait associations using regression model performance and identifies candidate QTL regions through a sliding window approach. The tool enables efficient gene discovery and supports molecular breeding in crops.
 
 -----
