@@ -55,7 +55,7 @@ pip install numpy==2.2.6 mlqtl
     git clone https://github.com/huanglab-cbi/mlqtl.git
 
     # Or download from our website
-    wget https://cbi.njau.edu.cn/mlqtl-doc/download/source_code.tar.gz
+    wget https://cbi.njau.edu.cn/mlqtl/download/source_code.tar.gz
     ```
 
 2.  **Navigate to the Directory**
@@ -109,7 +109,7 @@ Commands:
   run         Run ML-QTL analysis
 ```
 
-For detailed instructions and API usage, please see the full [**documentation**](https://cbi.njau.edu.cn/mlqtl-doc/en/index.html).
+For detailed instructions and API usage, please see the full [**documentation**](https://cbi.njau.edu.cn/mlqtl/en/index.html).
 
 -----
 
@@ -117,16 +117,16 @@ For detailed instructions and API usage, please see the full [**documentation**]
 
 ### Step 1: Download Sample Data
 
-Visit the [download page](https://cbi.njau.edu.cn/mlqtl-doc/download/) to get `imputed_base_filtered_v0.7.vcf.gz`, `gene_location_range.txt`, and `grain_length.txt`.
+Visit the [download page](https://cbi.njau.edu.cn/mlqtl/download/) to get `imputed_base_filtered_v0.7.vcf.gz`, `gene_location_range.txt`, and `grain_length.txt`.
 Alternatively, use the following commands to download them:
 
 ```bash
-wget https://cbi.njau.edu.cn/mlqtl-doc/download/imputed_base_filtered_v0.7.vcf.gz
-wget https://cbi.njau.edu.cn/mlqtl-doc/download/gene_location_range.txt
-wget https://cbi.njau.edu.cn/mlqtl-doc/download/grain_length.txt
+wget https://cbi.njau.edu.cn/mlqtl/download/imputed_base_filtered_v0.7.vcf.gz
+wget https://cbi.njau.edu.cn/mlqtl/download/gene_location_range.txt
+wget https://cbi.njau.edu.cn/mlqtl/download/grain_length.txt
 ```
 
-> **Note:** The `gene_location_range.txt` is generated based on the GFF file of the reference genome. For details, please refer to the [documentation](https://cbi.njau.edu.cn/mlqtl-doc/en/index.html)
+> **Note:** The `gene_location_range.txt` is generated based on the GFF file of the reference genome. For details, please refer to the [documentation](https://cbi.njau.edu.cn/mlqtl/en/index.html)
 
 ### Step 2: Preprocess the Data
 
