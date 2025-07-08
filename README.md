@@ -109,7 +109,7 @@ Commands:
   run         Run ML-QTL analysis
 ```
 
-For detailed instructions and API usage, please see the full [**documentation**](https://cbi.njau.edu.cn/mlqtl/en/index.html).
+For detailed instructions and API usage, please see the full [**documentation**](https://cbi.njau.edu.cn/mlqtl/doc).
 
 -----
 
@@ -126,7 +126,7 @@ wget https://cbi.njau.edu.cn/mlqtl/download/gene_location_range.txt
 wget https://cbi.njau.edu.cn/mlqtl/download/grain_length.txt
 ```
 
-> **Note:** The `gene_location_range.txt` is generated based on the GFF file of the reference genome. For details, please refer to the [documentation](https://cbi.njau.edu.cn/mlqtl/en/index.html)
+> **Note:** The `gene_location_range.txt` is generated based on the GFF file of the reference genome. For details, please refer to the [documentation](https://cbi.njau.edu.cn/mlqtl/doc)
 
 ### Step 2: Preprocess the Data
 
