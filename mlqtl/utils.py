@@ -109,10 +109,28 @@ def gff3_to_range(gff_file: str, region: str = "CDS") -> DataFrame:
     """
     Convert GFF3 file to plink gene range format
     """
-    gff = pd.read_csv(gff_file, sep=r"\s+", header=None, comment="#")
-    gff_filtered = gff[gff[2] == region].filter([0, 3, 4, 8])
+    gff = pd.read_csv(
+        gff_file,
+        sep="\t",
+        header=None,
+        comment="#",
+        usecols=range(9),
+        names=[
+            "seqid",
+            "source",
+            "type",
+            "start",
+            "end",
+            "score",
+            "strand",
+            "phase",
+            "attributes",
+        ],
+    )
+    gff_filtered = gff[gff["type"] == region].copy()
     if gff_filtered.empty:
         return None
+    gff_filtered = gff_filtered[["seqid", "start", "end", "attributes"]].copy()
     gff_filtered.columns = ["chr", "start", "end", "attributes"]
     gff_filtered["id"] = gff_filtered["attributes"].str.extract(
         r"[Ii][Dd]=([^;]+)", expand=False
@@ -121,5 +139,5 @@ def gff3_to_range(gff_file: str, region: str = "CDS") -> DataFrame:
         r"[Pp]arent=([^;]+)", expand=False
     )
     gff_filtered["parent"] = gff_filtered["parent_temp"].fillna(gff_filtered["id"])
-    gff_filtered = gff_filtered.filter(["chr", "start", "end", "id", "parent"])
+    gff_filtered = gff_filtered[["chr", "start", "end", "id", "parent"]]
     return gff_filtered

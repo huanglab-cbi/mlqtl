@@ -6,9 +6,9 @@ import pandas as pd
 
 from .data import Dataset
 from .train import train_with_progressbar, feature_importance
-from .datautils import sliding_window, proc_train_res
+from .datautils import sliding_window_newmethod, proc_train_res
 from .plot import plot_graph, plot_feature_importance
-from .utils import get_class_from_path, run_plink, gff3_to_range, gtf_to_range
+from .utils import get_class_from_path, gff3_to_range, gtf_to_range
 
 
 @click.group()
@@ -54,18 +54,6 @@ def main():
     help="Number of processes to use",
     show_default=True,
 )
-@click.option("--threshold", type=float, help="Significance threshold")
-@click.option(
-    "-w",
-    "--window",
-    type=int,
-    default=100,
-    help="Sliding window size",
-    show_default=True,
-)
-@click.option(
-    "--step", type=int, default=10, help="Sliding window step size", show_default=True
-)
 @click.option(
     "-m",
     "--model",
@@ -83,16 +71,38 @@ def main():
     help="Use one-hot encoding for categorical features",
 )
 @click.option(
-    "--adaptive_threshold",
-    is_flag=True,
-    default=False,
-    help="Use adaptive threshold when cannot find significant genes",
-)
-@click.option(
     "--padj",
     is_flag=True,
-    default=False,
-    help="Use adjusted p-value for significance threshold",
+    default=True,
+    help="Use adjusted p-value for significance threshold (default: True)",
+)
+@click.option(
+    "--center-window-kb",
+    type=int,
+    default=400,
+    show_default=True,
+    help="Window radius in kilobases (kb) for symmetric neighborhood (e.g., 400 for ±400kb)",
+)
+@click.option(
+    "--center-step-genes",
+    type=int,
+    default=10,
+    show_default=True,
+    help="Step size in number of genes for center-based window",
+)
+@click.option(
+    "--q",
+    type=float,
+    default=0.9,
+    show_default=True,
+    help="Quantile used as window score for --newmethod (e.g. 0.9 = 90% quantile)",
+)
+@click.option(
+    "--top-prop",
+    type=float,
+    default=0.10,
+    show_default=True,
+    help="Top proportion of windows genome-wide selected as QTL for --newmethod (e.g. 0.10 = top 10%)",
 )
 def run(
     geno,
@@ -100,15 +110,15 @@ def run(
     range,
     out,
     jobs,
-    threshold,
-    window,
-    step,
     model,
     chrom,
     trait,
     onehot,
-    adaptive_threshold,
     padj,
+    center_window_kb,
+    center_step_genes,
+    q,
+    top_prop,
 ):
     """Run ML-QTL analysis"""
 
@@ -121,13 +131,13 @@ def run(
     click.secho(f"{'Gene range file:':<25} {range}", fg="cyan")
     click.secho(f"{'Output directory:':<25} {out}", fg="cyan")
     click.secho(f"{'Number of processes:':<25} {jobs}", fg="cyan")
-    click.secho(
-        f"{'Significance threshold:':<25} {threshold if threshold else '1/N'}",
-        fg="cyan",
-    )
-    click.secho(f"{'Sliding window size:':<25} {window}", fg="cyan")
-    click.secho(f"{'Sliding window step size:':<25} {step}", fg="cyan")
     click.secho(f"{'Model(s):':<25} {model}", fg="cyan")
+    click.secho(f"{'Sliding window method:':<25} Symmetric neighborhood (±{center_window_kb}kb around each gene)", fg="cyan")
+    click.secho(f"{'Sliding window step:':<25} {center_step_genes} genes", fg="cyan")
+    click.secho(f"{'Newmethod quantile q:':<25} {q}", fg="cyan")
+    click.secho(f"{'Newmethod top proportion:':<25} {top_prop}", fg="cyan")
+    click.secho(f"{'Window score quantile (q):':<25} {q}", fg="cyan")
+    click.secho(f"{'QTL definition: top windows genome-wide':<25} {top_prop}", fg="cyan")
     click.secho(
         f"{'Chromosome:':<25} {chrom if chrom else 'all chromosomes'}", fg="cyan"
     )
@@ -136,32 +146,9 @@ def run(
         f"{'One-hot encoding:':<25} {'enabled' if onehot else 'disabled'}", fg="cyan"
     )
     click.secho(
-        f"{'Adaptive threshold:':<25} {'enabled' if adaptive_threshold else 'disabled'}",
-        fg="cyan",
-    )
-    click.secho(
         f"{'Use adjusted p-value:':<25} {'enabled' if padj else 'disabled'}", fg="cyan"
     )
     click.echo("=" * 40 + "\n")
-
-    if threshold and threshold > 0.05:
-        click.secho(
-            "WARNING: Threshold should be less than 0.05 for genome-wide significance, current value may not be appropriate.",
-            fg="yellow",
-        )
-
-    if threshold and threshold <= 0:
-        click.secho(
-            "WARNING: Threshold should be greater than 0.",
-            fg="red",
-        )
-        return
-
-    if not threshold:
-        click.secho(
-            "Using 1/N as the significance threshold, where N is the number of genes.",
-            fg="yellow",
-        )
 
     try:
         dataset = Dataset(geno, range, pheno)
@@ -218,50 +205,40 @@ def run(
         return
 
     # Start the analysis
-    threshold = 1 / len(dataset.gene.name) if threshold is None else threshold
     click.echo("==> Starting Analysis ...")
-    click.echo(f"==> Genome-wide significance Threshold: {threshold}")
     for trait in analysis_trait:
         click.echo(f"==> Analyzing Trait: {trait}")
-        click.echo(f"==> Training Model ...")
+        click.echo("==> Training Model ...")
         train_res = train_with_progressbar(trait, models, dataset, max_workers, onehot)
-        click.echo(f"==> Processing Training Result ...")
+        click.echo("==> Processing Training Result ...")
         try:
-            try_threshold = threshold
             train_res_processed = proc_train_res(train_res, models, dataset, padj)
-            while try_threshold > 0:
-                sw_res, sig_genes = sliding_window(
-                    train_res_processed, window, step, try_threshold
-                )
-                if adaptive_threshold and sig_genes.empty:
-                    try_threshold *= np.sqrt(10)
-                    continue
-                else:
-                    break
+            sw_res, sig_genes, window_threshold = sliding_window_newmethod(
+                train_res_processed,
+                center_window_kb,
+                center_step_genes,
+                q=q,
+                top_prop=top_prop,
+            )
+
         except Exception as e:
             click.secho(f"ERROR: {e}", fg="red")
             return
 
-        if adaptive_threshold and try_threshold != threshold:
-            click.secho(
-                f"==> Adaptive threshold applied. The new threshold for this trait is: {try_threshold}",
-                fg="yellow",
-            )
-
         if sig_genes.empty:
             click.secho(
-                f"==> No significant genes found for this trait with threshold {try_threshold}",
+                "==> No significant genes found for this trait",
                 fg="yellow",
             )
 
         trait_dir = os.path.join(out, f"{trait}")
         os.mkdir(trait_dir) if not os.path.exists(trait_dir) else None
         # plot and save
-        plot_path = os.path.join(trait_dir, f"sliding_window")
-        plot_graph(sw_res, try_threshold, plot_path, save=True)
+        plot_path = os.path.join(trait_dir, "sliding_window")
+        plot_graph(sw_res, 10 ** (-window_threshold), plot_path, save=True)
         click.echo(f"==> Result Graph [{plot_path}.png]")
         # save the sliding window result
-        df_path = os.path.join(trait_dir, f"significant_genes.tsv")
+        df_path = os.path.join(trait_dir, "significant_genes.tsv")
         sig_genes.to_csv(
             df_path,
             sep="\t",
@@ -270,107 +247,21 @@ def run(
         )
         click.echo(f"==> Significant Genes Table [{df_path}]")
         # save the original training result
-        pkl_path = os.path.join(trait_dir, f"train_res.pkl")
+        pkl_path = os.path.join(trait_dir, "train_res.pkl")
         with open(pkl_path, "wb") as f:
             pickle.dump(train_res, f)
         click.echo(f"==> Training Result Pkl [{pkl_path}]")
         # save the training result as dataframe
         train_res_processed.to_csv(
-            os.path.join(trait_dir, f"train_res.tsv"),
+            os.path.join(trait_dir, "train_res.tsv"),
             sep="\t",
             index=False,
             header=True,
         )
         click.echo(
-            f"==> Training Result Table [{os.path.join(trait_dir, f"train_res.tsv")}]"
+            f"==> Training Result Table [{os.path.join(trait_dir, 'train_res.tsv')}]"
         )
-    click.secho(f"Analysis completed", fg="green")
-
-
-@main.command()
-@click.option(
-    "-f",
-    "--file",
-    type=click.Path(exists=True),
-    required=True,
-    help="Path to the training result file (dataframe)",
-)
-@click.option(
-    "-w",
-    "--window",
-    type=int,
-    default=100,
-    help="Sliding window size",
-    show_default=True,
-)
-@click.option(
-    "-s",
-    "--step",
-    type=int,
-    default=10,
-    help="Sliding window step size",
-    show_default=True,
-)
-@click.option(
-    "-t", "--threshold", type=float, required=True, help="Significance threshold"
-)
-@click.option("-o", "--out", type=click.Path(), required=True, help="Output directory")
-def rerun(file, window, step, threshold, out):
-    """Re-run sliding window analysis with new parameters"""
-
-    output_dir = os.path.join(out)
-    try:
-        os.makedirs(output_dir)
-    except FileExistsError:
-        click.secho(
-            f"Output directory {output_dir} already exists. Existing files may be overwritten",
-            fg="yellow",
-        )
-    except OSError as e:
-        click.secho(
-            f"Error creating output directory {output_dir}: {e}",
-            fg="red",
-        )
-        return
-
-    df = pd.read_csv(file, sep=r"\s+", header=0)
-    if df.empty:
-        click.secho("ERROR: The input file is empty", fg="red")
-        return
-    try:
-        df = df.astype(
-            {
-                "gene": str,
-                "model": "category",
-                "corr": np.float64,
-                "padj": np.float64,
-                "chr": str,
-                "padj_norm": np.float64,
-            }
-        )
-        sw_res, sig_genes = sliding_window(df, window, step, threshold)
-        if sig_genes.empty:
-            click.secho(
-                f"No significant genes found with threshold {threshold}",
-                fg="red",
-            )
-            return
-
-        plot_path = os.path.join(output_dir, f"sliding_window")
-        plot_graph(sw_res, threshold, plot_path, save=True)
-        click.echo(f"==> Graph plotted and saved to {plot_path}.png")
-        # save the sliding window result
-        df_path = os.path.join(output_dir, f"significant_genes.tsv")
-        sig_genes.to_csv(
-            df_path,
-            sep="\t",
-            header=True,
-            index=False,
-        )
-        click.echo(f"==> Significant genes saved to {df_path}.tsv")
-    except Exception as e:
-        click.secho(f"ERROR: {e}", fg="red")
-        return
+    click.secho("Analysis completed", fg="green")
 
 
 @main.command()

@@ -197,8 +197,8 @@ wheels = [
 
 [[package]]
 name = "mlqtl"
-version = "0.1.6"
-source = { editable = "." }
+version = "0.1.8"
+source = { virtual = "." }
 dependencies = [
     { name = "click" },
     { name = "contourpy" },

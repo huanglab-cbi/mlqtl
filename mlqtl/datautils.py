@@ -95,10 +95,14 @@ def proc_train_res(
         .merge(
             dataset.gene.df.groupby("gene")
             .apply(
-                lambda group: group.assign(start_min=group["start"].min()),
+                lambda group: group.assign(
+                    start_min=group["start"].min(),
+                    end_max=group["end"].max(),
+                    center=(group["start"].min() + group["end"].max()) / 2,
+                ),
                 include_groups=False,
             )
-            .filter(["chr", "start_min"])
+            .filter(["chr", "start_min", "end_max", "center"])
             .reset_index(level="gene")
             .drop_duplicates(),
             how="left",
@@ -108,6 +112,14 @@ def proc_train_res(
         .astype({"chr": "string"})
         .assign(padj_norm=lambda df: -np.log10(df["padj"]))
     )
+
+    res["padj_norm"] = -np.log10(res["padj"])
+    finite_mask = np.isfinite(res["padj_norm"].to_numpy())
+    if finite_mask.any():
+        finite_max = float(res.loc[finite_mask, "padj_norm"].max())
+        capped = res["padj_norm"].to_numpy()
+        capped[~finite_mask] = finite_max + 1.0
+        res["padj_norm"] = capped
 
     return res
 
@@ -170,7 +182,7 @@ def merge_window(
     MatrixFloat64
         The merged windows with start and end positions and the mean padj_norm value
     """
-    window_loc = window_mean[window_mean[:, 2] > threshold][:, 0:2]
+    window_loc = window_mean[window_mean[:, 2] >= threshold][:, 0:2]
     if len(window_loc) == 0:
         return None
     loc_merged, tmp = [], window_loc[0]
@@ -179,7 +191,7 @@ def merge_window(
             tmp = np.array([tmp[0], end])
         else:
             loc_merged.append(tmp)
-            tmp = (start, end)
+            tmp = np.array([start, end])
     loc_merged.append(tmp)
     return np.array(loc_merged)
 
@@ -187,7 +199,6 @@ def merge_window(
 def significance(
     sliding_window_result: List[Tuple[str, MatrixFloat64, MatrixFloat64]],
     result: DataFrame,
-    threshold: np.float64,
 ) -> DataFrame:
     """
     Get the gene in the peek window of the green region
@@ -198,8 +209,6 @@ def significance(
         Results of the sliding window calculation
     result : DataFrame
         Integrated training results
-    threshold : np.float64
-        The threshold to filter the candidate genes
 
     Returns
     -------
@@ -212,19 +221,16 @@ def significance(
             continue
         tmp = result[result["chr"] == chr].reset_index(drop=True)
         for i, region in enumerate(window_merged):
-            start, end = region
-            window_mean_green = window_mean[
-                (window_mean[:, 0] >= start) & (window_mean[:, 1] <= end)
-            ]
-            peek_window = window_mean_green[np.argmax(window_mean_green[:, 2])]
-            start, end = peek_window[0], peek_window[1]
-            tmp_res = tmp.loc[int(start) : int(end)].copy()
-            tmp_res["region"] = i + 1
-            tmp_res = tmp_res.sort_values(by=["padj_norm"], ascending=False)
-            region_gene = pd.concat([region_gene, tmp_res], axis=0)
+            merged_start, merged_end = region
+            tmp_sorted = tmp.sort_values(by=["center"], ascending=True).reset_index(
+                drop=True
+            )
+            tmp_res = tmp_sorted.loc[int(merged_start) : int(merged_end)].copy()
+            if not tmp_res.empty:
+                tmp_res["region"] = i + 1
+                tmp_res = tmp_res.sort_values(by=["padj_norm"], ascending=False)
+                region_gene = pd.concat([region_gene, tmp_res], axis=0)
     region_gene = region_gene.reset_index(drop=True)
-    if not region_gene.empty:
-        region_gene = region_gene[region_gene["padj_norm"] > threshold]
     return region_gene
 
 
@@ -265,3 +271,118 @@ def sliding_window(
         sw_res.append((c, window_mean, window_merged))
     sig_genes = significance(sw_res, result, threshold_norm)
     return sw_res, sig_genes
+
+
+def cal_sliding_window_quantile(
+    met: DataFrame,
+    chrom: str,
+    center_window_kb: int = None,
+    center_step_genes: int = None,
+    q: float = 0.9,
+) -> MatrixFloat64:
+    """
+    Sliding window based on padj_norm quantile (e.g. 90% quantile) instead of mean.
+
+    This is used by the new quantile-based method that does not require
+    an explicit p-value threshold.
+    """
+    window_score = []
+    met_chr = (
+        met[met["chr"] == chrom]
+        .sort_values(by=["center"], ascending=True)
+        .reset_index(drop=True)
+    )
+    if len(met_chr) == 0:
+        return np.array([])
+
+    window_radius_bp = center_window_kb * 1000
+    step_genes = center_step_genes
+
+    gene_num = len(met_chr)
+    gene_centers = met_chr["center"].values
+
+    i = 0
+    while i < gene_num:
+        center_gene_center = gene_centers[i]
+        window_left = center_gene_center - window_radius_bp
+        window_right = center_gene_center + window_radius_bp
+
+        mask = (gene_centers >= window_left) & (gene_centers <= window_right)
+        window_genes_indices = np.where(mask)[0].tolist()
+        if len(window_genes_indices) == 0:
+            i += step_genes
+            if i >= gene_num:
+                break
+            continue
+
+        window_genes = met_chr.iloc[window_genes_indices]
+        padj_norm = window_genes["padj_norm"].to_numpy()
+        finite_vals = padj_norm[np.isfinite(padj_norm)]
+        if finite_vals.size == 0:
+            i += step_genes
+            if i >= gene_num:
+                break
+            continue
+        score_val = float(np.quantile(finite_vals, q))
+
+        start_idx = window_genes_indices[0]
+        end_idx = window_genes_indices[-1]
+        window_score.append(np.array([start_idx, end_idx, score_val]))
+
+        i += step_genes
+        if i >= gene_num:
+            break
+
+    return np.array(window_score) if window_score else np.array([])
+
+
+def sliding_window_newmethod(
+    result: DataFrame,
+    center_window_kb: int = None,
+    center_step_genes: int = None,
+    q: float = 0.9,
+    top_prop: float = 0.10,
+) -> Tuple[List[Tuple[np.str_, MatrixFloat64, MatrixFloat64]], DataFrame, float]:
+    """
+    New quantile-based method:
+    - Gene score: padj_norm = -log10(padj)
+    - Window score: q-quantile (e.g. 90%) of padj_norm in the window
+    - QTL regions: top `top_prop` (e.g. 10%) windows genome-wide by window score
+
+    Returns sliding window results, significant genes and the window-score threshold
+    (in padj_norm scale).
+    """
+    chr_list = result["chr"].unique()
+    sw_res = []
+    all_scores = []
+
+    for c in chr_list:
+        window_score = cal_sliding_window_quantile(
+            result,
+            c,
+            center_window_kb,
+            center_step_genes,
+            q,
+        )
+        if window_score.size > 0:
+            all_scores.extend(window_score[:, 2].tolist())
+        sw_res.append((c, window_score, None))
+
+    if not all_scores:
+        return sw_res, result.iloc[0:0].copy(), 0.0
+
+    all_scores_arr = np.array(all_scores, dtype=float)
+    finite_scores = all_scores_arr[np.isfinite(all_scores_arr)]
+    if finite_scores.size == 0:
+        return sw_res, result.iloc[0:0].copy(), 0.0
+    window_threshold = float(np.quantile(finite_scores, 1.0 - top_prop))
+    sw_res_new = []
+    for c, window_score, _ in sw_res:
+        if window_score.size == 0:
+            sw_res_new.append((c, window_score, None))
+            continue
+        window_merged = merge_window(window_score, window_threshold)
+        sw_res_new.append((c, window_score, window_merged))
+    sig_genes = significance(sw_res_new, result)
+
+    return sw_res_new, sig_genes, window_threshold
