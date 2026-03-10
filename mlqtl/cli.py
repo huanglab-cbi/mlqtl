@@ -1,23 +1,20 @@
 import click
-import numpy as np
 import os
-import pickle
-import pandas as pd
 
-from .data import Dataset
-from .train import train_with_progressbar, feature_importance
-from .datautils import (
-    sliding_window_newmethod,
-    proc_train_res,
-    build_qtl_regions_from_high_windows,
-)
-from .plot import plot_graph, plot_feature_importance
-from .utils import get_class_from_path, gff3_to_range, gtf_to_range
+# from .data import Dataset
+# from .train import train_with_progressbar, feature_importance
+# from .datautils import (
+#     sliding_window_newmethod,
+#     proc_train_res,
+#     build_qtl_regions_from_high_windows,
+# )
+# from .plot import plot_graph, plot_feature_importance
+# from .utils import get_class_from_path, gff3_to_range, gtf_to_range
 
 
 @click.group()
 def main():
-    """ML-QTL: Machine Learning for QTL Analysis"""
+    """mlQTL: Machine Learning for QTL Analysis"""
     pass
 
 
@@ -124,11 +121,20 @@ def run(
     q,
     top_prop,
 ):
-    """Run ML-QTL analysis"""
+    """Run mlQTL analysis"""
+    from .data import Dataset
+    from .train import train_with_progressbar
+    from .datautils import (
+        sliding_window_newmethod,
+        proc_train_res,
+        build_qtl_regions_from_high_windows,
+    )
+    from .plot import plot_graph
+    from .utils import get_class_from_path
 
     # echo the parameters
     click.echo("\n" + "=" * 40)
-    click.secho("     ML-QTL Analysis Parameters     ", fg="green", bold=True)
+    click.secho("     mlQTL Analysis Parameters     ", fg="green", bold=True)
     click.echo("=" * 40)
     click.secho(f"{'Genotype file:':<25} {geno}", fg="cyan")
     click.secho(f"{'Phenotype file:':<25} {pheno}", fg="cyan")
@@ -322,6 +328,10 @@ def run(
 )
 def importance(geno, pheno, range, gene, model, trait, out, onehot):
     """Calculate feature importance and plot bar chart"""
+    from .data import Dataset
+    from .train import feature_importance
+    from .plot import plot_feature_importance
+    from .utils import get_class_from_path
 
     try:
         dataset = Dataset(geno, range, pheno)
@@ -392,6 +402,8 @@ def importance(geno, pheno, range, gene, model, trait, out, onehot):
 @click.option("-o", "--out", type=click.Path(), required=True, help="Output directory")
 def gff2range(gff, region, out):
     """Convert GFF3 file to plink gene range format"""
+    from .utils import gff3_to_range
+
     try:
         os.makedirs(out)
     except FileExistsError:
@@ -417,6 +429,9 @@ def gff2range(gff, region, out):
 @click.option("-o", "--out", type=click.Path(), required=True, help="Output directory")
 def gtf2range(gtf, region, out):
     """Convert GTF file to plink gene range format"""
+
+    from .utils import gtf_to_range
+
     try:
         os.makedirs(out)
     except FileExistsError:

@@ -1,8 +1,8 @@
-# 🧬 ML-QTL: Machine Learning for Quantitative Trait Loci Mapping
+# 🧬 mlQTL: Machine Learning for Quantitative Trait Loci Mapping
 
 [![PyPI version](https://badge.fury.io/py/mlqtl.svg?icon=si%3Apython)](https://badge.fury.io/py/mlqtl)
 
-`ML-QTL` is a machine learning–based Python tool for QTL mapping. It assesses SNP–trait associations using regression model performance and identifies candidate QTL regions through a sliding window approach. The tool enables efficient gene discovery and supports molecular breeding in crops.
+`mlQTL` is a machine learning–based Python tool for QTL mapping. It assesses SNP–trait associations using regression model performance and identifies candidate QTL regions through a sliding window approach. The tool enables efficient gene discovery and supports molecular breeding in crops.
 
 -----
 
@@ -88,7 +88,7 @@ pip install numpy==2.2.6 mlqtl
 
 ## 🚀 Usage
 
-`ML-QTL` requires genotype data in the plink binary format (`.bed`, `.bim`, `.fam`). If your data is in VCF format, you must first convert it using [plink](https://www.cog-genomics.org/plink).
+`mlQTL` requires genotype data in the plink binary format (`.bed`, `.bim`, `.fam`). If your data is in VCF format, you must first convert it using [plink](https://www.cog-genomics.org/plink).
 
 The primary CLI tool provides several commands:
 
@@ -96,7 +96,7 @@ The primary CLI tool provides several commands:
 ❯ mlqtl --help
 Usage: mlqtl [OPTIONS] COMMAND [ARGS]...
 
-  ML-QTL: Machine Learning for QTL Analysis
+  mlQTL: Machine Learning for QTL Analysis
 
 Options:
   --help  Show this message and exit.
@@ -106,7 +106,7 @@ Commands:
   gtf2range   Convert GTF file to plink gene range format
   importance  Calculate feature importance and plot bar chart
   rerun       Re-run sliding window analysis with new parameters
-  run         Run ML-QTL analysis
+  run         Run mlQTL analysis
 ```
 
 For detailed instructions and API usage, please see the full [**documentation**](https://cbi.njau.edu.cn/mlqtl/doc).
@@ -147,7 +147,7 @@ plink --vcf ${vcf} \
       --out imputed
 ```
 
-### Step 3: Run ML-QTL Analysis
+### Step 3: Run mlQTL Analysis
 
 **1. Run Analysis**
 
