@@ -5,13 +5,27 @@ from typing import List, Tuple
 from .nda_typing import MatrixFloat64
 
 
-def _plot_chr(axs, chr, window_mean, threshold):
+def _plot_chr(
+    axs,
+    chr: str,
+    window_mean: MatrixFloat64,
+    window_merged: MatrixFloat64 | None,
+    threshold: float,
+):
+    if window_mean is None or getattr(window_mean, "size", 0) == 0:
+        axs.set_xlabel("Window Index")
+        axs.set_ylabel("-log10(P-value)")
+        axs.set_title(f"Chr {chr} (Gene number: 0)")
+        return axs
+
     y = window_mean[:, 2]
-    x = list(range(len(y)))
+    x = np.arange(len(y))
 
     axs.plot(x, y, color="black")
-    mask = np.array(y) > threshold
-    axs.fill_between(x, y, where=mask, color="green", alpha=1)
+
+    mask = y >= threshold
+    if mask.any():
+        axs.fill_between(x, y, where=mask, color="green", alpha=1)
     axs.axhline(y=threshold, color="#dc7633", linestyle="dashed")
     axs.set_xlabel("Window Index")
     axs.set_ylabel("-log10(P-value)")
@@ -31,6 +45,7 @@ def plot_graph(
     Plot the sliding window result
     """
     threshold_norm = -np.log10(threshold)
+
     plt.rcParams["font.size"] = font_size
     chr_num = len(sliding_window_result)
     _, axs = plt.subplots(chr_num, figsize=(20, 40 / 12 * chr_num))
@@ -41,8 +56,8 @@ def plot_graph(
     if len(sliding_window_result) == 1:
         axs = [axs]
     for i, res in enumerate(sliding_window_result):
-        chr, window_mean, _ = res
-        axs[i] = _plot_chr(axs[i], chr, window_mean, threshold_norm)
+        chr, window_mean, window_merged = res
+        axs[i] = _plot_chr(axs[i], chr, window_mean, window_merged, threshold_norm)
 
     plt.tight_layout()
     plt.show()

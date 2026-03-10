@@ -6,7 +6,11 @@ import pandas as pd
 
 from .data import Dataset
 from .train import train_with_progressbar, feature_importance
-from .datautils import sliding_window_newmethod, proc_train_res
+from .datautils import (
+    sliding_window_newmethod,
+    proc_train_res,
+    build_qtl_regions_from_high_windows,
+)
 from .plot import plot_graph, plot_feature_importance
 from .utils import get_class_from_path, gff3_to_range, gtf_to_range
 
@@ -132,12 +136,15 @@ def run(
     click.secho(f"{'Output directory:':<25} {out}", fg="cyan")
     click.secho(f"{'Number of processes:':<25} {jobs}", fg="cyan")
     click.secho(f"{'Model(s):':<25} {model}", fg="cyan")
-    click.secho(f"{'Sliding window method:':<25} Symmetric neighborhood (±{center_window_kb}kb around each gene)", fg="cyan")
+    click.secho(
+        f"{'Sliding window method:':<25} Symmetric neighborhood (±{center_window_kb}kb around each gene)",
+        fg="cyan",
+    )
     click.secho(f"{'Sliding window step:':<25} {center_step_genes} genes", fg="cyan")
-    click.secho(f"{'Newmethod quantile q:':<25} {q}", fg="cyan")
-    click.secho(f"{'Newmethod top proportion:':<25} {top_prop}", fg="cyan")
     click.secho(f"{'Window score quantile (q):':<25} {q}", fg="cyan")
-    click.secho(f"{'QTL definition: top windows genome-wide':<25} {top_prop}", fg="cyan")
+    click.secho(
+        f"{'QTL definition: top windows genome-wide':<25} {top_prop}", fg="cyan"
+    )
     click.secho(
         f"{'Chromosome:':<25} {chrom if chrom else 'all chromosomes'}", fg="cyan"
     )
@@ -246,11 +253,21 @@ def run(
             index=False,
         )
         click.echo(f"==> Significant Genes Table [{df_path}]")
+        qtl_regions = build_qtl_regions_from_high_windows(
+            sw_res,
+            train_res_processed,
+            window_threshold,
+        )
+        if not qtl_regions.empty:
+            qtl_path = os.path.join(trait_dir, "qtl_regions.tsv")
+            qtl_regions.to_csv(qtl_path, sep="\t", header=True, index=False)
+            click.echo(f"==> QTL Regions Table [{qtl_path}]")
+
         # save the original training result
-        pkl_path = os.path.join(trait_dir, "train_res.pkl")
-        with open(pkl_path, "wb") as f:
-            pickle.dump(train_res, f)
-        click.echo(f"==> Training Result Pkl [{pkl_path}]")
+        # pkl_path = os.path.join(trait_dir, "train_res.pkl")
+        # with open(pkl_path, "wb") as f:
+        #     pickle.dump(train_res, f)
+        # click.echo(f"==> Training Result Pkl [{pkl_path}]")
         # save the training result as dataframe
         train_res_processed.to_csv(
             os.path.join(trait_dir, "train_res.tsv"),

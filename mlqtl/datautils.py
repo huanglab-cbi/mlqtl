@@ -336,6 +336,118 @@ def cal_sliding_window_quantile(
     return np.array(window_score) if window_score else np.array([])
 
 
+def merge_high_windows_by_window_index(
+    window_mean: MatrixFloat64, threshold: float
+) -> MatrixFloat64 | None:
+    if window_mean is None or getattr(window_mean, "size", 0) == 0:
+        return None
+
+    mask_high = window_mean[:, 2] >= threshold
+    high_indices = np.where(mask_high)[0]
+    if high_indices.size == 0:
+        return None
+
+    seg_start = int(high_indices[0])
+    seg_prev = int(high_indices[0])
+    segments: list[tuple[int, int]] = []
+    for idx in high_indices[1:]:
+        idx = int(idx)
+        if idx == seg_prev + 1:
+            seg_prev = idx
+        else:
+            segments.append((seg_start, seg_prev))
+            seg_start = seg_prev = idx
+    segments.append((seg_start, seg_prev))
+
+    merged: list[np.ndarray] = []
+    for win_lo, win_hi in segments:
+        s_idx = int(window_mean[win_lo : win_hi + 1, 0].min())
+        e_idx = int(window_mean[win_lo : win_hi + 1, 1].max())
+        merged.append(np.array([s_idx, e_idx], dtype=float))
+    return np.array(merged) if merged else None
+
+
+def build_qtl_regions_from_high_windows(
+    sliding_window_result: List[Tuple[str, MatrixFloat64, MatrixFloat64 | None]],
+    result: DataFrame,
+    window_threshold: float,
+    use_center: bool = True,
+) -> DataFrame:
+    rows: list[dict[str, float | int | str]] = []
+    if window_threshold is None:
+        return pd.DataFrame()
+    for chr_name, window_mean, _ in sliding_window_result:
+        if window_mean is None or getattr(window_mean, "size", 0) == 0:
+            continue
+        mask_high = window_mean[:, 2] >= window_threshold
+        high_indices = np.where(mask_high)[0]
+        if high_indices.size == 0:
+            continue
+        df_chr = result[result["chr"].astype(str) == str(chr_name)]
+        if df_chr.empty:
+            continue
+        if not {"start_min", "end_max"}.issubset(df_chr.columns):
+            continue
+        if use_center and "center" in df_chr.columns:
+            df_chr = df_chr.sort_values(by=["center"], ascending=True).reset_index(
+                drop=True
+            )
+            region_idx = 1
+            seg_start = int(high_indices[0])
+            seg_prev = int(high_indices[0])
+            segments: list[tuple[int, int]] = []
+            for idx in high_indices[1:]:
+                idx = int(idx)
+                if idx == seg_prev + 1:
+                    seg_prev = idx
+                else:
+                    segments.append((seg_start, seg_prev))
+                    seg_start = seg_prev = idx
+            segments.append((seg_start, seg_prev))
+            for win_lo, win_hi in segments:
+                s_idx = int(window_mean[win_lo : win_hi + 1, 0].min())
+                e_idx = int(window_mean[win_lo : win_hi + 1, 1].max())
+                if s_idx < 0 or e_idx >= len(df_chr) or s_idx > e_idx:
+                    continue
+                genes = df_chr.iloc[s_idx : e_idx + 1].copy()
+                if genes.empty:
+                    continue
+                qtl_start = float(genes["start_min"].min())
+                qtl_end = float(genes["end_max"].max())
+                gene_count = int(genes.shape[0])
+                best_padj = (
+                    float(genes["padj"].min()) if "padj" in genes.columns else np.nan
+                )
+                best_padj_norm = (
+                    float(genes["padj_norm"].max())
+                    if "padj_norm" in genes.columns
+                    else np.nan
+                )
+                rows.append(
+                    {
+                        "chr": str(chr_name),
+                        "region": region_idx,
+                        "qtl_start": qtl_start,
+                        "qtl_end": qtl_end,
+                        "gene_count": gene_count,
+                        "best_padj": best_padj,
+                        "best_padj_norm": best_padj_norm,
+                    }
+                )
+                region_idx += 1
+    qtl_regions = pd.DataFrame(rows)
+    if qtl_regions.empty:
+        return qtl_regions
+    qtl_regions = qtl_regions.sort_values(
+        by=["chr", "region"], ascending=True
+    ).reset_index(drop=True)
+    qtl_regions["qtl_center"] = (qtl_regions["qtl_start"] + qtl_regions["qtl_end"]) / 2
+    for col in ("qtl_start", "qtl_end", "qtl_center"):
+        if col in qtl_regions.columns:
+            qtl_regions[col] = qtl_regions[col].round().astype(int)
+    return qtl_regions
+
+
 def sliding_window_newmethod(
     result: DataFrame,
     center_window_kb: int = None,
@@ -381,7 +493,9 @@ def sliding_window_newmethod(
         if window_score.size == 0:
             sw_res_new.append((c, window_score, None))
             continue
-        window_merged = merge_window(window_score, window_threshold)
+        window_merged = merge_high_windows_by_window_index(
+            window_score, window_threshold
+        )
         sw_res_new.append((c, window_score, window_merged))
     sig_genes = significance(sw_res_new, result)
 
