@@ -107,7 +107,7 @@ For detailed instructions and API usage, please see the full [**documentation**]
 
 ### Step 1: Download Sample Data
 
-Visit the [download page](https://cbi.njau.edu.cn/mlqtl/download/) to get `imputed_base_filtered_v0.7.vcf.gz`, `gene_location_range.txt`, and `grain_length.txt`.
+Visit the [download page](https://cbi.njau.edu.cn/mlqtl/doc/download/) to get `imputed_base_filtered_v0.7.vcf.gz`, `gene_location_range.txt`, and `grain_length.txt`.
 Alternatively, use the following commands to download them:
 
 ```bash
