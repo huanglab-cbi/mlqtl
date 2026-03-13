@@ -111,6 +111,7 @@ def plot_feature_importance(
         ax.yaxis.grid(True, linestyle="--", alpha=0.9)
         ax.xaxis.grid(False)
         plt.tight_layout()
-        plt.show()
         if save:
             plt.savefig(f"{filename}_{model_name}.png", dpi=300, bbox_inches="tight")
+        else:
+            plt.show()
