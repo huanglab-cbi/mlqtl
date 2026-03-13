@@ -1,5 +1,38 @@
 import click
 import os
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+console = Console()
+
+
+def _print_params_panel(rows):
+    table = Table(show_header=True, header_style="bold", box=box.SIMPLE)
+    table.add_column("Parameter", style="bold")
+    table.add_column("Value", style="cyan")
+    for key, value in rows:
+        table.add_row(key, value)
+    panel = Panel.fit(table, title="mlQTL Analysis Parameters", border_style="green")
+    console.print("\n", panel, "\n", sep="")
+
+
+def _info(message):
+    console.print(f"[bold]INFO:[/bold] {message}")
+
+
+def _warn(message):
+    console.print(f"[bold yellow]WARNING:[/bold yellow] {message}")
+
+
+def _error(message):
+    console.print(f"[bold red]ERROR:[/bold red] {message}")
+
+
+def _success(message):
+    console.print(f"[bold green]SUCCESS:[/bold green] {message}")
+
 
 # from .data import Dataset
 # from .train import train_with_progressbar, feature_importance
@@ -73,9 +106,10 @@ def main():
 )
 @click.option(
     "--padj",
-    is_flag=True,
+    type=bool,
     default=True,
-    help="Use adjusted p-value for significance threshold (default: True)",
+    show_default=True,
+    help="Use adjusted p-value for significance threshold",
 )
 @click.option(
     "--center-window-kb",
@@ -132,41 +166,32 @@ def run(
     from .plot import plot_graph
     from .utils import get_class_from_path
 
-    # echo the parameters
-    click.echo("\n" + "=" * 40)
-    click.secho("     mlQTL Analysis Parameters     ", fg="green", bold=True)
-    click.echo("=" * 40)
-    click.secho(f"{'Genotype file:':<25} {geno}", fg="cyan")
-    click.secho(f"{'Phenotype file:':<25} {pheno}", fg="cyan")
-    click.secho(f"{'Gene range file:':<25} {range}", fg="cyan")
-    click.secho(f"{'Output directory:':<25} {out}", fg="cyan")
-    click.secho(f"{'Number of processes:':<25} {jobs}", fg="cyan")
-    click.secho(f"{'Model(s):':<25} {model}", fg="cyan")
-    click.secho(
-        f"{'Sliding window method:':<25} Symmetric neighborhood (±{center_window_kb}kb around each gene)",
-        fg="cyan",
+    _print_params_panel(
+        [
+            ("Genotype file", str(geno)),
+            ("Phenotype file", str(pheno)),
+            ("Gene range file", str(range)),
+            ("Output directory", str(out)),
+            ("Number of processes", str(jobs)),
+            ("Model(s)", str(model)),
+            (
+                "Sliding window method",
+                f"Symmetric neighborhood (±{center_window_kb} kb around each gene)",
+            ),
+            ("Sliding window step", f"{center_step_genes} genes"),
+            ("Window score quantile (q)", str(q)),
+            ("QTL definition (top windows genome-wide)", str(top_prop)),
+            ("Chromosome", chrom if chrom else "all chromosomes"),
+            ("Trait", trait if trait else "all traits"),
+            ("One-hot encoding", "enabled" if onehot else "disabled"),
+            ("Use adjusted p-value", "enabled" if padj else "disabled"),
+        ]
     )
-    click.secho(f"{'Sliding window step:':<25} {center_step_genes} genes", fg="cyan")
-    click.secho(f"{'Window score quantile (q):':<25} {q}", fg="cyan")
-    click.secho(
-        f"{'QTL definition: top windows genome-wide':<25} {top_prop}", fg="cyan"
-    )
-    click.secho(
-        f"{'Chromosome:':<25} {chrom if chrom else 'all chromosomes'}", fg="cyan"
-    )
-    click.secho(f"{'Trait:':<25} {trait if trait else 'all traits'}", fg="cyan")
-    click.secho(
-        f"{'One-hot encoding:':<25} {'enabled' if onehot else 'disabled'}", fg="cyan"
-    )
-    click.secho(
-        f"{'Use adjusted p-value:':<25} {'enabled' if padj else 'disabled'}", fg="cyan"
-    )
-    click.echo("=" * 40 + "\n")
 
     try:
         dataset = Dataset(geno, range, pheno)
     except Exception as e:
-        click.secho(f"ERROR: {e}", fg="red")
+        _error(str(e))
         return
     max_workers = jobs if jobs > 0 else 1
     analysis_trait = dataset.trait.name
@@ -175,7 +200,7 @@ def run(
     try:
         models = [get_class_from_path(m) for m in model]
     except ImportError as e:
-        click.secho(f"{e}", fg="red")
+        _error(str(e))
         return
 
     # check option values
@@ -183,10 +208,7 @@ def run(
         input_trait = set(trait.split(","))
         all_trait = set(dataset.trait.name)
         if not input_trait <= all_trait:
-            click.secho(
-                f"Trait {trait} not found in dataset",
-                fg="red",
-            )
+            _error(f"Trait {trait} not found in dataset")
             return
         analysis_trait = trait.split(",")
 
@@ -194,10 +216,7 @@ def run(
         input_chrom = set(chrom.split(","))
         all_chrom = set(dataset.gene.df["chr"].unique())
         if not input_chrom <= all_chrom:
-            click.secho(
-                f"Chromosome {chrom} not found in dataset",
-                fg="red",
-            )
+            _error(f"Chromosome {chrom} not found in dataset")
             return
         dataset.gene.filter_by_chr(chrom.split(","))
 
@@ -206,24 +225,26 @@ def run(
     try:
         os.makedirs(output_dir)
     except FileExistsError:
-        click.secho(
-            f"Output directory {output_dir} already exists. Existing files may be overwritten",
-            fg="yellow",
+        _warn(
+            f"Output directory {output_dir} already exists. Existing files may be overwritten."
         )
     except OSError as e:
-        click.secho(
-            f"Error creating output directory {output_dir}: {e}",
-            fg="red",
-        )
+        _error(f"Error creating output directory {output_dir}: {e}")
         return
 
     # Start the analysis
-    click.echo("==> Starting Analysis ...")
+    _info("Starting analysis")
     for trait in analysis_trait:
-        click.echo(f"==> Analyzing Trait: {trait}")
-        click.echo("==> Training Model ...")
-        train_res = train_with_progressbar(trait, models, dataset, max_workers, onehot)
-        click.echo("==> Processing Training Result ...")
+        console.print(f"[bold]Trait:[/bold] {trait}")
+        _info("Training model")
+        train_res = train_with_progressbar(
+            trait,
+            models,
+            dataset,
+            max_workers,
+            onehot,
+        )
+        _info("Processing training result")
         try:
             train_res_processed = proc_train_res(train_res, models, dataset, padj)
             sw_res, sig_genes, window_threshold = sliding_window_newmethod(
@@ -235,30 +256,27 @@ def run(
             )
 
         except Exception as e:
-            click.secho(f"ERROR: {e}", fg="red")
+            _error(str(e))
             return
 
         if sig_genes.empty:
-            click.secho(
-                "==> No significant genes found for this trait",
-                fg="yellow",
-            )
+            _warn("No significant genes found for this trait")
 
         trait_dir = os.path.join(out, f"{trait}")
         os.mkdir(trait_dir) if not os.path.exists(trait_dir) else None
         # plot and save
         plot_path = os.path.join(trait_dir, "sliding_window")
         plot_graph(sw_res, 10 ** (-window_threshold), plot_path, save=True)
-        click.echo(f"==> Result Graph [{plot_path}.png]")
+        _info(f"Result graph saved to {plot_path}.png")
         # save the sliding window result
-        df_path = os.path.join(trait_dir, "significant_genes.tsv")
+        df_path = os.path.join(trait_dir, "candidate_genes.tsv")
         sig_genes.to_csv(
             df_path,
             sep="\t",
             header=True,
             index=False,
         )
-        click.echo(f"==> Significant Genes Table [{df_path}]")
+        _info(f"Candidate genes table saved to {df_path}")
         qtl_regions = build_qtl_regions_from_high_windows(
             sw_res,
             train_res_processed,
@@ -267,13 +285,14 @@ def run(
         if not qtl_regions.empty:
             qtl_path = os.path.join(trait_dir, "qtl_regions.tsv")
             qtl_regions.to_csv(qtl_path, sep="\t", header=True, index=False)
-            click.echo(f"==> QTL Regions Table [{qtl_path}]")
+            _info(f"QTL regions table saved to {qtl_path}")
 
         # save the original training result
+        # import pickle
         # pkl_path = os.path.join(trait_dir, "train_res.pkl")
         # with open(pkl_path, "wb") as f:
         #     pickle.dump(train_res, f)
-        # click.echo(f"==> Training Result Pkl [{pkl_path}]")
+        # _info(f"Original training result saved to {pkl_path}")
         # save the training result as dataframe
         train_res_processed.to_csv(
             os.path.join(trait_dir, "train_res.tsv"),
@@ -281,10 +300,10 @@ def run(
             index=False,
             header=True,
         )
-        click.echo(
-            f"==> Training Result Table [{os.path.join(trait_dir, 'train_res.tsv')}]"
+        _info(
+            f"Training result table saved to {os.path.join(trait_dir, 'train_res.tsv')}"
         )
-    click.secho("Analysis completed", fg="green")
+    _success("Analysis completed")
 
 
 @main.command()
@@ -336,13 +355,13 @@ def importance(geno, pheno, range, gene, model, trait, out, onehot):
     try:
         dataset = Dataset(geno, range, pheno)
     except Exception as e:
-        click.secho(f"ERROR: {e}", fg="red")
+        _error(str(e))
         return
     model = model.split(",")
     try:
         models = [get_class_from_path(m) for m in model]
     except ImportError as e:
-        click.secho(f"{e}", fg="red")
+        _error(str(e))
         return
 
     # create output directory if not exists
@@ -350,34 +369,22 @@ def importance(geno, pheno, range, gene, model, trait, out, onehot):
     try:
         os.makedirs(output_dir)
     except FileExistsError:
-        click.secho(
-            f"Output directory {output_dir} already exists. Existing files may be overwritten",
-            fg="yellow",
+        _warn(
+            f"Output directory {output_dir} already exists. Existing files may be overwritten."
         )
     except OSError as e:
-        click.secho(
-            f"Error creating output directory {output_dir}: {e}",
-            fg="red",
-        )
+        _error(f"Error creating output directory {output_dir}: {e}")
         return
 
     if gene not in dataset.gene.name:
-        click.secho(
-            f"Gene {gene} not found in dataset",
-            fg="red",
-        )
+        _error(f"Gene {gene} not found in dataset")
         return
     if trait not in dataset.trait.name:
-        click.secho(
-            f"Trait {trait} not found in dataset",
-            fg="red",
-        )
+        _error(f"Trait {trait} not found in dataset")
         return
-    click.echo(
-        f"==> Calculating feature importance for gene {gene} and trait {trait} ...",
-    )
+    _info(f"Calculating feature importance for gene {gene} and trait {trait}")
     feature_importance_df = feature_importance(gene, trait, models, dataset, onehot)
-    click.echo("==> Feature importance calculated successfully")
+    _success("Feature importance calculated successfully")
     gene_dir = os.path.join(output_dir, gene)
     if not os.path.exists(gene_dir):
         os.mkdir(gene_dir)
@@ -387,11 +394,11 @@ def importance(geno, pheno, range, gene, model, trait, out, onehot):
         sep="\t",
         index=True,
     )
-    click.echo("==> Starting to plot feature importance ...")
+    _info("Starting feature importance plot")
     # feature importance plot
     plot_path = os.path.join(gene_dir, f"{gene}_{trait}")
     plot_feature_importance(feature_importance_df, 10, True, plot_path)
-    click.echo(f"==> Feature importance plot saved to {gene_dir}")
+    _info(f"Feature importance plot saved to {gene_dir}")
 
 
 @main.command()
@@ -407,18 +414,17 @@ def gff2range(gff, region, out):
     try:
         os.makedirs(out)
     except FileExistsError:
-        click.secho(
-            f"Output directory {out} already exists. Existing files may be overwritten",
-            fg="yellow",
+        _warn(
+            f"Output directory {out} already exists. Existing files may be overwritten."
         )
     df = gff3_to_range(gff, region)
     if df is None:
-        click.secho("The selected area does not exist in the file", fg="red")
+        _error("The selected area does not exist in the file")
         return
     prefix = os.path.splitext(os.path.basename(gff))[0]
     out_path = os.path.join(out, f"{prefix}_{region}.range")
     df.to_csv(out_path, sep="\t", header=False, index=False)
-    click.secho(f"The range file is saved to {out_path}", fg="green")
+    _success(f"The range file is saved to {out_path}")
 
 
 @main.command()
@@ -435,18 +441,17 @@ def gtf2range(gtf, region, out):
     try:
         os.makedirs(out)
     except FileExistsError:
-        click.secho(
-            f"Output directory {out} already exists. Existing files may be overwritten",
-            fg="yellow",
+        _warn(
+            f"Output directory {out} already exists. Existing files may be overwritten."
         )
     df = gtf_to_range(gtf, region)
     if df is None:
-        click.secho("The selected area does not exist in the file", fg="red")
+        _error("The selected area does not exist in the file")
         return
     prefix = os.path.splitext(os.path.basename(gtf))[0]
     out_path = os.path.join(out, f"{prefix}_{region}.range")
     df.to_csv(out_path, sep="\t", header=False, index=False)
-    click.secho(f"The range file is saved to {out_path}", fg="green")
+    _success(f"The range file is saved to {out_path}")
 
 
 if __name__ == "__main__":

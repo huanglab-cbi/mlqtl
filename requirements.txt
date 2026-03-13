@@ -5,3 +5,4 @@ matplotlib==3.9.4
 pandas==2.3.2
 scikit-learn==1.7.1
 scipy==1.15.3
+rich==14.3.3

@@ -2,18 +2,17 @@
 
 [![PyPI version](https://badge.fury.io/py/mlqtl.svg?icon=si%3Apython)](https://badge.fury.io/py/mlqtl)
 
-`mlQTL` is a machine learning–based Python tool for QTL mapping. It assesses SNP–trait associations using regression model performance and identifies candidate QTL regions through a sliding window approach. The tool enables efficient gene discovery and supports molecular breeding in crops.
+`mlQTL` is a gene-centric machine learning framework for genome-wide QTL detection. It models the relationship between genomic variants and phenotypes at the gene level, capturing nonlinear effects and weak-effect loci. A sliding window strategy aggregates gene-level signals to identify high-confidence QTL regions and prioritize candidate causal variants. mlQTL is released as an open-source Python toolkit for high-throughput, reproducible genetic analysis and molecular breeding research.
 
 -----
 
 ## ⚙️ Features
 
-  * **Efficient Data Handling**: Utilizes `plink` binary file formats for genotype data, enabling efficient handling of large-scale genomic datasets
-  * **Flexible Modeling**: Supports multiple regression models, including Decision Tree Regression, Random Forest Regression, and Support Vector Regression
-  * **Clear Visualization**: Generates sliding window prediction results with output visualization capabilities
-  * **Gene-Level Insights**: Calculates and reports SNP importance scores within specific genes
-  * **Parallelism**: Built-in support for multiprocessing to dramatically speed up analysis
-  * **Flexibility**: Offers a Command-Line Interface (CLI) for automation and a **Python API for custom scripting
+* **Gene-level QTL detection**: Uses SNPs from any genomic regions within genes to model gene-phenotype associations.
+* **Multiple regression models**: Decision Tree, Random Forest, and Support Vector Regression; additional models and encoding schemes can be customized.
+* **Sliding window analysis**: Aggregates gene scores into window scores for robust QTL detection.
+* **SNP prioritization**: Feature importance scores quantify contributions of individual SNPs for fine-scale variant prioritization. Scalable and efficient: Supports large datasets with multi-process parallelism.
+* **Flexible workflow**: Provides command-line interface and Python API with customizable parameters, visualization, and output options. Open-source and reproducible: Available on GitHub with example datasets and documentation.
 
 -----
 
@@ -70,18 +69,10 @@ pip install numpy==2.2.6 mlqtl
     pip install -r requirements.txt
     ```
 
-4.  **Build the Package**
+4.  **Install the Package**
 
     ```bash
-    pip install build
-    python -m build
-    ```
-
-5.  **Install the Built Package**
-
-    ```bash
-    # Replace {version} with the actual version number
-    pip install dist/mlqtl-{version}-py3-none-any.whl
+    pip install .
     ```
 
 -----
@@ -105,7 +96,6 @@ Commands:
   gff2range   Convert GFF3 file to plink gene range format
   gtf2range   Convert GTF file to plink gene range format
   importance  Calculate feature importance and plot bar chart
-  rerun       Re-run sliding window analysis with new parameters
   run         Run mlQTL analysis
 ```
 
@@ -121,9 +111,9 @@ Visit the [download page](https://cbi.njau.edu.cn/mlqtl/download/) to get `imput
 Alternatively, use the following commands to download them:
 
 ```bash
-wget https://cbi.njau.edu.cn/mlqtl/download/imputed_base_filtered_v0.7.vcf.gz
-wget https://cbi.njau.edu.cn/mlqtl/download/gene_location_range.txt
-wget https://cbi.njau.edu.cn/mlqtl/download/grain_length.txt
+wget https://cbi.njau.edu.cn/mlqtl/doc/download/imputed_base_filtered_v0.7.vcf.gz
+wget https://cbi.njau.edu.cn/mlqtl/doc/download/gene_location_range.txt
+wget https://cbi.njau.edu.cn/mlqtl/doc/download/grain_length.txt
 ```
 
 > **Note:** The `gene_location_range.txt` is generated based on the GFF file of the reference genome. For details, please refer to the [documentation](https://cbi.njau.edu.cn/mlqtl/doc)
@@ -155,9 +145,7 @@ plink --vcf ${vcf} \
 mlqtl run -g imputed \
           -p grain_length.txt \
           -r gene_location_range.txt \
-          -j 8 \
-          --padj \
-          --threshold 2.74e-5 \
+          -j 64 \
           -o result
 ```
 

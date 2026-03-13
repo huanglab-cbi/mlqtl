@@ -9,7 +9,15 @@ from inspect import signature
 from sklearn.base import RegressorMixin
 from pandas import DataFrame
 import warnings
-import click
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
 from .data import Dataset
 from .nda_typing import (
@@ -278,25 +286,30 @@ def feature_importance(
 
 def _progress_bar_manager(queue: multiprocessing, total_genes: int, trait: str):
     """
-    Manages the click.progressbar by listening to a queue.
+    Manages the Rich progress bar by listening to a queue.
     Receives 'None' to terminate.
     """
-    with click.progressbar(
-        length=total_genes,
-        label=f"{trait}",
-        show_pos=True,
-        show_percent=True,
-        show_eta=True,
-    ) as bar:
+    columns = [
+        TextColumn("[bold]{task.description}[/bold]"),
+        BarColumn(),
+        TaskProgressColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+    ]
+    with Progress(*columns) as progress:
+        task_id = progress.add_task(trait, total=total_genes)
         processed_count = 0
         while processed_count < total_genes:
             message = queue.get()
             if message is None:
                 break
             if message == "TICK":
-                bar.update(1)
+                progress.update(task_id, advance=1)
                 processed_count += 1
-        bar.finish()
+        if processed_count < total_genes:
+            progress.update(task_id, completed=processed_count)
+        progress.refresh()
 
 
 def _task_progressbar(
